@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Mayhem</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #101418;
+            --panel: #171d22;
+            --panel-strong: #1f2a31;
+            --text: #f4f7f2;
+            --muted: #aeb8ad;
+            --line: #314048;
+            --green: #7bd88f;
+            --gold: #f2c94c;
+            --red: #ff6b6b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        main {
+            width: min(1100px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 48px 0;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+            gap: 32px;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(44px, 7vw, 86px);
+            line-height: 0.95;
+            letter-spacing: 0;
+        }
+
+        .subtitle {
+            max-width: 650px;
+            margin: 20px 0 0;
+            color: var(--muted);
+            font-size: 20px;
+            line-height: 1.5;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 0 18px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel-strong);
+            color: var(--text);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .button.primary {
+            background: var(--green);
+            color: #102017;
+            border-color: var(--green);
+        }
+
+        .terminal {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #0b0f12;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+        }
+
+        .terminal-bar {
+            display: flex;
+            gap: 7px;
+            padding: 12px;
+            border-bottom: 1px solid var(--line);
+            background: #12181d;
+        }
+
+        .dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: var(--red);
+        }
+
+        .dot:nth-child(2) {
+            background: var(--gold);
+        }
+
+        .dot:nth-child(3) {
+            background: var(--green);
+        }
+
+        pre {
+            margin: 0;
+            padding: 22px;
+            overflow-x: auto;
+            color: #d8ead6;
+            font: 15px/1.55 Menlo, Monaco, Consolas, "Courier New", monospace;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 34px;
+        }
+
+        .card {
+            min-height: 150px;
+            padding: 20px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+        }
+
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 20px;
+            letter-spacing: 0;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        code {
+            color: var(--green);
+        }
+
+        @media (max-width: 820px) {
+            main {
+                padding: 32px 0;
+            }
+
+            .hero,
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="hero" aria-labelledby="title">
+            <div>
+                <h1 id="title">Market Mayhem</h1>
+                <p class="subtitle">
+                    A terminal-based Java stock trading game built to teach AP-style Java through arrays,
+                    loops, methods, input validation, and clean game flow.
+                </p>
+                <div class="actions">
+                    <a class="button primary" href="https://github.com/BosssyPanda/MarketMayhem">View Source</a>
+                    <a class="button" href="#run">Run Locally</a>
+                </div>
+            </div>
+
+            <div class="terminal" aria-label="Market Mayhem terminal preview">
+                <div class="terminal-bar" aria-hidden="true">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+                <pre>MARKET MAYHEM
+=============
+Day: 1 / 15
+Cash: $1000
+Portfolio: $0
+Net Worth: $1000
+
+0. Exit
+1. View Market
+2. Advance Day
+3. View Portfolio
+4. Buy Stock
+5. Sell Stock</pre>
+            </div>
+        </section>
+
+        <section class="grid" aria-label="Project status">
+            <div class="card" id="run">
+                <h2>Run Locally</h2>
+                <p><code>javac MarketMayhem.java</code><br><code>java MarketMayhem</code></p>
+            </div>
+            <div class="card">
+                <h2>v0.1 Complete</h2>
+                <p>Includes market display, random daily price changes, portfolio tracking, buy/sell trades, and final win/loss summary.</p>
+            </div>
+            <div class="card">
+                <h2>Beginner Java</h2>
+                <p>Uses one Java file, static methods, arrays, indexed loops, <code>Scanner</code>, and terminal input/output only.</p>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

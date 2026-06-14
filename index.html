@@ -232,7 +232,12 @@ Net Worth: $1000
         <section class="grid" aria-label="Project status">
             <div class="card" id="run" tabindex="-1">
                 <h2>Run Locally</h2>
-                <p><code>javac MarketMayhem.java</code><br><code>java MarketMayhem</code></p>
+                <p>
+                    <code>git clone https://github.com/BosssyPanda/MarketMayhem.git</code><br>
+                    <code>cd MarketMayhem</code><br>
+                    <code>javac MarketMayhem.java</code><br>
+                    <code>java MarketMayhem</code>
+                </p>
                 <div class="run-status" id="run-status" aria-live="polite"></div>
             </div>
             <div class="card">
@@ -249,7 +254,7 @@ Net Worth: $1000
         var runButton = document.getElementById("run-button");
         var runCard = document.getElementById("run");
         var runStatus = document.getElementById("run-status");
-        var runCommands = "javac MarketMayhem.java\njava MarketMayhem";
+        var runCommands = "git clone https://github.com/BosssyPanda/MarketMayhem.git\ncd MarketMayhem\njavac MarketMayhem.java\njava MarketMayhem";
 
         function showRunStatus(message) {
             runStatus.textContent = message;
@@ -262,16 +267,16 @@ Net Worth: $1000
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(runCommands).then(function () {
                     runButton.textContent = "Commands Copied";
-                    showRunStatus("Copied. Paste these commands in your terminal from the repo folder.");
+                    showRunStatus("Copied. Paste these commands in Terminal. They clone the repo, enter it, compile, and run.");
 
                     window.setTimeout(function () {
                         runButton.textContent = "Run Locally";
                     }, 1800);
                 }).catch(function () {
-                    showRunStatus("Copy these commands and run them in your terminal from the repo folder.");
+                    showRunStatus("Copy these commands into Terminal. They clone the repo, enter it, compile, and run.");
                 });
             } else {
-                showRunStatus("Copy these commands and run them in your terminal from the repo folder.");
+                showRunStatus("Copy these commands into Terminal. They clone the repo, enter it, compile, and run.");
             }
         });
     </script>

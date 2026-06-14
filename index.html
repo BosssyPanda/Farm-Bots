@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Mayhem</title>
+    <title>Market Mayhem v0.2</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101418'/%3E%3Cpath d='M14 44h36M18 38l8-10 8 7 12-17' fill='none' stroke='%237bd88f' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
         :root {
@@ -139,7 +139,7 @@
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px;
             margin-top: 34px;
         }
@@ -196,10 +196,10 @@
     <main>
         <section class="hero" aria-labelledby="title">
             <div>
-                <h1 id="title">Market Mayhem</h1>
+                <h1 id="title">Market Mayhem v0.2</h1>
                 <p class="subtitle">
-                    A terminal-based Java stock trading game built to teach AP-style Java through arrays,
-                    loops, methods, input validation, and clean game flow.
+                    Java Learning Edition is a terminal-based stock trading game that teaches loops, arrays,
+                    methods, sequential search, and binary search while you play.
                 </p>
                 <div class="actions">
                     <a class="button primary" href="https://github.com/BosssyPanda/MarketMayhem">View Source</a>
@@ -219,13 +219,21 @@ Day: 1 / 15
 Cash: $1000
 Portfolio: $0
 Net Worth: $1000
+Java XP: 0
+Learning Mode: ON
 
 0. Exit
 1. View Market
 2. Advance Day
 3. View Portfolio
 4. Buy Stock
-5. Sell Stock</pre>
+5. Sell Stock
+6. Java Concept Map
+7. Loops + Arrays Lab
+8. Methods Lab
+9. Search Lab
+10. Toggle Learning Mode
+99. Run Developer Tests</pre>
             </div>
         </section>
 
@@ -241,12 +249,16 @@ Net Worth: $1000
                 <div class="run-status" id="run-status" aria-live="polite"></div>
             </div>
             <div class="card">
-                <h2>v0.1 Complete</h2>
-                <p>Includes market display, random daily price changes, portfolio tracking, buy/sell trades, and final win/loss summary.</p>
+                <h2>Learning Mode</h2>
+                <p>Shows Java code snippets, loop traces, concept checks, and Java XP alongside the playable trading game.</p>
             </div>
             <div class="card">
-                <h2>Beginner Java</h2>
-                <p>Uses one Java file, static methods, arrays, indexed loops, <code>Scanner</code>, and terminal input/output only.</p>
+                <h2>Search Lab</h2>
+                <p>Practise manual sequential search and binary search with comparison counts, sorted-data checks, and terminal traces.</p>
+            </div>
+            <div class="card">
+                <h2>Developer Tests</h2>
+                <p>Runs beginner-friendly PASS/FAIL checks for index validation, portfolio math, and manually coded search helpers.</p>
             </div>
         </section>
     </main>

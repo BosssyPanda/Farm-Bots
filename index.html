@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Mayhem v0.2</title>
+    <title>Market Mayhem: Java Trading Academy</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101418'/%3E%3Cpath d='M14 44h36M18 38l8-10 8 7 12-17' fill='none' stroke='%237bd88f' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
         :root {
@@ -196,10 +196,13 @@
     <main>
         <section class="hero" aria-labelledby="title">
             <div>
-                <h1 id="title">Market Mayhem v0.2</h1>
+                <h1 id="title">Market Mayhem: Java Trading Academy</h1>
                 <p class="subtitle">
-                    Java Learning Edition is a terminal-based stock trading game that teaches loops, arrays,
-                    methods, sequential search, and binary search while you play.
+                    Codex builds the terminal trading game. The student learns Java by playing:
+                    entering academy floors, answering active challenges, and unlocking trading
+                    abilities through Java mastery. The Mixed Review Boss is now playable,
+                    Java Trading License unlocks after passing the boss, XP requires correct
+                    answers, and no source-file editing is required.
                 </p>
                 <div class="actions">
                     <a class="button primary" href="https://github.com/BosssyPanda/MarketMayhem">View Source</a>
@@ -221,6 +224,7 @@ Portfolio: $0
 Net Worth: $1000
 Java XP: 0
 Learning Mode: ON
+Questions: 0 correct / 0 answered
 
 0. Exit
 1. View Market
@@ -228,12 +232,10 @@ Learning Mode: ON
 3. View Portfolio
 4. Buy Stock
 5. Sell Stock
-6. Java Concept Map
-7. Loops + Arrays Lab
-8. Methods Lab
-9. Search Lab
-10. Toggle Learning Mode
-99. Run Developer Tests</pre>
+6. Java Trading Academy
+7. Mastery Report
+8. Toggle Learning Mode
+9. Run Developer Tests</pre>
             </div>
         </section>
 
@@ -249,16 +251,76 @@ Learning Mode: ON
                 <div class="run-status" id="run-status" aria-live="polite"></div>
             </div>
             <div class="card">
-                <h2>Learning Mode</h2>
-                <p>Shows Java code snippets, loop traces, concept checks, and Java XP alongside the playable trading game.</p>
+                <h2>Active Challenge Engine</h2>
+                <p>Every academy challenge asks first, then explains. Reading alone never awards Java XP.</p>
             </div>
             <div class="card">
-                <h2>Search Lab</h2>
-                <p>Practise manual sequential search and binary search with comparison counts, sorted-data checks, and terminal traces.</p>
+                <h2>Complete Teaching Loop</h2>
+                <p>Learn by predicting, tracing, fixing, filling blanks, and applying for loops, while loops, arrays, methods, sequential search, and binary search inside the game.</p>
+            </div>
+            <div class="card">
+                <h2>For Loop Floor</h2>
+                <p>Predict output, trace i, fix off-by-one bugs, fill loop conditions, and apply loops to scanning the stock market.</p>
+            </div>
+            <div class="card">
+                <h2>Market Scanner Unlock</h2>
+                <p>Master for loops to unlock a scanner that explains how View Market traverses stock arrays with i &lt; prices.length.</p>
+            </div>
+            <div class="card">
+                <h2>Arrays Floor</h2>
+                <p>Predict array access, trace the last valid index, fix invalid indexes, fill array length expressions, and apply parallel arrays to the stock market.</p>
+            </div>
+            <div class="card">
+                <h2>Index Vision Unlock</h2>
+                <p>Master arrays to unlock buy/sell hints that explain valid index ranges and how parallel arrays keep ticker, price, ID, owned shares, and risk aligned.</p>
+            </div>
+            <div class="card">
+                <h2>While Loop Floor</h2>
+                <p>Predict output, trace loop-control variables, fix infinite loops, fill digit expressions, and decode market signals using while loops.</p>
+            </div>
+            <div class="card">
+                <h2>Signal Decoder Unlock</h2>
+                <p>Master while loops to unlock market signal hints that explain digit processing with signal % 10 and signal / 10.</p>
+            </div>
+            <div class="card">
+                <h2>Sequential Search Floor</h2>
+                <p>Trace checked indexes, predict found indexes, handle not-found cases, fill return statements, and apply linear search to stock tickers.</p>
+            </div>
+            <div class="card">
+                <h2>Ticker Finder Unlock</h2>
+                <p>Master sequential search to unlock a buy-screen tool that scans tickers from first to last and shows comparison counts.</p>
+            </div>
+            <div class="card">
+                <h2>Binary Search Floor</h2>
+                <p>Learn the sorted-data requirement, trace low/high/mid, update the search range, fill while-loop conditions, and apply binary search to stock IDs.</p>
+            </div>
+            <div class="card">
+                <h2>Fast Broker Unlock</h2>
+                <p>Master binary search to unlock a buy-screen tool that searches sorted stock IDs using low, high, mid, and comparison counts.</p>
+            </div>
+            <div class="card">
+                <h2>Mixed Review Boss</h2>
+                <p>Beat a 10-question boss fight that mixes loops, arrays, methods, sequential search, binary search, and stock-market applications.</p>
+            </div>
+            <div class="card">
+                <h2>Java Trading License</h2>
+                <p>Pass the boss to unlock a 20% final-score bonus and prove mastery across the academy.</p>
+            </div>
+            <div class="card">
+                <h2>Methods Floor</h2>
+                <p>Predict return values, trace parameters, fix method calls, fill method headers, and apply reusable methods to trading logic.</p>
+            </div>
+            <div class="card">
+                <h2>Trade Calculator Unlock</h2>
+                <p>Master methods to unlock buy/sell previews that explain calculateTradeValue(index, shares), return values, and reusable game logic.</p>
+            </div>
+            <div class="card">
+                <h2>Mastery Unlocks</h2>
+                <p>Correct answers build topic mastery and unlock trading abilities like Market Scanner, Signal Decoder, Index Vision, Trade Calculator, Ticker Finder, Fast Broker, and Java Trading License.</p>
             </div>
             <div class="card">
                 <h2>Developer Tests</h2>
-                <p>Runs beginner-friendly PASS/FAIL checks for index validation, portfolio math, and manually coded search helpers.</p>
+                <p>Runs beginner-friendly PASS/FAIL checks for trading behavior and the active teaching engine.</p>
             </div>
         </section>
     </main>

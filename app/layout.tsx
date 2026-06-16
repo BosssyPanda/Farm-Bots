@@ -19,7 +19,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Market Mayhem: Farm Bots",
+  title: "Farm Bots",
   description: "Learn Java by writing real code to automate a farming drone.",
   icons: {
     icon: "/favicon.svg",

@@ -7,7 +7,7 @@ the quick overview.
 
 ## What this is
 
-**Market Mayhem: Farm Bots** — a browser game (Next.js on Vercel) that teaches **Java** the
+**Farm Bots** — a browser game (Next.js on Vercel) that teaches **Java** the
 way *The Farmer Was Replaced* teaches Python: the player **writes real Java** to automate a
 farming **drone** on **one persistent, continuously-running, tick-based farm**. Player code is
 compiled and run **server-side in Vercel Sandbox**; the browser animates the farm from the
@@ -18,15 +18,6 @@ table.
 ## Current state
 
 The repo now contains the browser-game scaffold plus a real Java engine and runner seam.
-The previous **terminal** version (a single-file quiz game, `MarketMayhem.java`, + its docs)
-was deleted from the working tree but is still recoverable from git history:
-
-```bash
-git show HEAD:MarketMayhem.java        # prior 1,928-line terminal game (reference only)
-git show HEAD:MARKET_MAYHEM_SPEC.md    # prior spec (six-concept progression)
-git show HEAD:index.html               # prior Vercel landing page (reusable as marketing)
-```
-
 Implemented so far:
 
 - Next.js App Router shell with editor, farm view, lesson panel, inspector, controls, console,
@@ -107,7 +98,7 @@ so untrusted player code runs in Vercel Sandbox.
 
 ## Deploy
 
-Linked Vercel project: **`marketmayhem`** (`.vercel/project.json`, gitignored). Deploy via
+Linked Vercel project is configured in `.vercel/project.json` (gitignored). Deploy via
 the `vercel:deploy` skill or `vercel` CLI. Use Node.js runtime + Fluid Compute for the
 function. Production Sandbox verification may require Vercel credentials and quota.
 

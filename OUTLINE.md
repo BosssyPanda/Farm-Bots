@@ -1,4 +1,4 @@
-# Market Mayhem: Farm Bots — Outline
+# Farm Bots — Outline
 
 A browser game in the spirit of *The Farmer Was Replaced*, but you learn **Java** instead of
 Python. You **write real Java code** to automate a farming **drone** on **one persistent

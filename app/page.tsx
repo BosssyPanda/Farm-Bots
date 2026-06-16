@@ -223,7 +223,7 @@ export default function Page() {
     <main className="app">
       <header className="topbar">
         <h1>
-          Market Mayhem <span className="accent">Farm Bots</span>
+          <span className="accent">Farm Bots</span>
         </h1>
         <span className="tag">{objective.concept}</span>
       </header>

@@ -1,4 +1,4 @@
-# AGENTS.md — Market Mayhem: Farm Bots
+# AGENTS.md — Farm Bots
 
 **This file is the canonical spec — the exact thing we are building.** Any coding agent
 (Claude, Codex, etc.) should be able to implement the project from this document alone. If

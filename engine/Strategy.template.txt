@@ -1,0 +1,11 @@
+public class Strategy {
+    public void run(Drone drone, Farm farm) {
+        // TODO: drive the drone east and plant a crop on the
+        // first three tiles of the top row.
+        //
+        // Useful API:
+        //   drone.moveEast();              // also moveNorth / moveSouth / moveWest, or move(Direction.EAST)
+        //   drone.plant(Crop.WHEAT);       // plant on the current tile
+        //   drone.watch("name", value);    // show a variable in the live inspector
+    }
+}

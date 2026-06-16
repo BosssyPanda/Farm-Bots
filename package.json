@@ -1,0 +1,36 @@
+{
+  "name": "market-mayhem-farm-bots",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "engine:build": "mkdir -p build/engine && javac -d build/engine engine/*.java",
+    "engine:run": "java -cp build/engine Runner",
+    "engine:catalog": "java -cp build/engine Runner --catalog",
+    "engine:verify": "node scripts/engine-verify.mjs"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@vercel/sandbox": "^2.2.1",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.9"
+  }
+}

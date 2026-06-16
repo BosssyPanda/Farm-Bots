@@ -6,3 +6,15 @@
 MarketMayhem_v0_2_learning_upgrade.zip
 MarketMayhem_before_learning_upgrade.java.bak
 tmp_v0_2_reference/
+
+# Node / Next.js
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Java engine build output
+build/
+
+# Local Claude settings
+.claude/settings.local.json

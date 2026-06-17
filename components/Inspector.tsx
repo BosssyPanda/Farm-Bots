@@ -1,8 +1,26 @@
 "use client";
 
+import { motion } from "motion/react";
 import type { DerivedState } from "@/lib/animate";
 import { inspectorValueClassName } from "@/lib/animate";
+import { hudTick } from "@/lib/motion";
 import type { FarmState, ObjectiveInfo, RunResponse } from "@/lib/types";
+
+// A value that re-pops whenever it changes (keyed on the rendered value).
+function LiveValue({ value }: { value: string | number | boolean }) {
+  return (
+    <motion.b
+      key={String(value)}
+      className={inspectorValueClassName(value)}
+      variants={hudTick}
+      initial="hidden"
+      animate="show"
+      style={{ display: "inline-block", fontFamily: "var(--font-mono)", textAlign: "right" }}
+    >
+      {String(value)}
+    </motion.b>
+  );
+}
 
 export default function Inspector({
   state,
@@ -38,19 +56,19 @@ export default function Inspector({
       </div>
       <div className="kv">
         <span>drone.x</span>
-        <b className={inspectorValueClassName(state.drone.x)}>{state.drone.x}</b>
+        <LiveValue value={state.drone.x} />
       </div>
       <div className="kv">
         <span>drone.y</span>
-        <b className={inspectorValueClassName(state.drone.y)}>{state.drone.y}</b>
+        <LiveValue value={state.drone.y} />
       </div>
       <div className="kv">
         <span>carrying</span>
-        <b className={inspectorValueClassName(state.drone.carrying)}>{state.drone.carrying}</b>
+        <LiveValue value={state.drone.carrying} />
       </div>
       <div className="kv">
         <span>tick</span>
-        <b className={inspectorValueClassName(state.tick)}>{state.tick}</b>
+        <LiveValue value={state.tick} />
       </div>
 
       <div className="section-label">watch()</div>
@@ -60,7 +78,7 @@ export default function Inspector({
         watchEntries.map(([key, value]) => (
           <div className="kv" key={key}>
             <span>{key}</span>
-            <b className={inspectorValueClassName(value)}>{String(value)}</b>
+            <LiveValue value={value} />
           </div>
         ))
       )}
@@ -72,7 +90,7 @@ export default function Inspector({
         resourceEntries.map(([key, value]) => (
           <div className="kv" key={key}>
             <span>{key}</span>
-            <b className={inspectorValueClassName(value)}>{value}</b>
+            <LiveValue value={value} />
           </div>
         ))
       )}

@@ -422,6 +422,12 @@ h2,
   border-color: var(--accent2);
 }
 
+.btn:focus-visible,
+.win-pill:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+
 .btn.run {
   background: var(--accent);
   color: #fff;
@@ -587,6 +593,7 @@ h2,
   padding: 6px 12px;
   border-radius: 8px;
   pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 .hud.left {
@@ -716,5 +723,269 @@ h2,
 
   .lesson-status {
     justify-content: flex-start;
+  }
+}
+
+/* ===================== Floating-window game shell ===================== */
+.app.shell {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* full-bleed farm sits behind everything */
+.farm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--farm-bg);
+  overflow: hidden;
+}
+
+.farm-backdrop .farm-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* the layer floating windows live in / are dragged within */
+.stage {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding: 64px 18px 32px;
+}
+
+/* top-left resource strip */
+.resbar {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.res-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(19, 22, 31, 0.82);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-family: var(--font-display);
+  backdrop-filter: blur(4px);
+}
+
+.res-chip.muted .res-val {
+  color: var(--muted);
+}
+
+.res-glyph {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  image-rendering: pixelated;
+}
+
+.res-glyph.clock {
+  background: var(--accent2);
+  border-radius: 50%;
+}
+
+.res-val {
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* top-right corner controls */
+.toolbar {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+}
+
+.tool-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(19, 22, 31, 0.82);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 15px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.tool-btn.run {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.tool-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tool-btn:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+
+/* the windows themselves */
+.gwin {
+  position: absolute;
+  background: var(--window);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 22px 54px -22px rgba(0, 0, 0, 0.8);
+  max-width: calc(100vw - 36px);
+}
+
+.gwin-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 10px;
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--border-soft);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.gwin-bar:active {
+  cursor: grabbing;
+}
+
+.gwin-run {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gwin-icon {
+  color: var(--accent2);
+  font-size: 12px;
+}
+
+.gwin-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.gwin-spacer {
+  flex: 1;
+}
+
+.gwin-pill {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--accent);
+  background: rgba(224, 101, 60, 0.16);
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.gwin-pill.idle {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.gwin-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.gwin-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.gwin-body {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.gwin-pad {
+  padding: 14px;
+}
+
+/* neutralize the inner panel chrome — the window provides the frame now */
+.gwin .panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* the window title already names the panel; hide the duplicate inner head */
+.gwin .panel-head {
+  display: none;
+}
+
+.gwin .editor-shell {
+  height: 300px;
+}
+
+/* on narrow screens, abandon free-floating: stack windows in flow */
+@media (max-width: 900px) {
+  .farm-backdrop {
+    position: fixed;
+    opacity: 0.5;
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 60px 12px 28px;
+  }
+
+  .gwin {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: 100%;
+    transform: none !important;
   }
 }

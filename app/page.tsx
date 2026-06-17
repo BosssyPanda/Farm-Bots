@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import Celebration from "@/components/Celebration";
 import ConsolePanel from "@/components/Console";
 import Controls from "@/components/Controls";
 import Editor from "@/components/Editor";
 import FarmView from "@/components/FarmView";
+import GameWindow from "@/components/GameWindow";
 import Inspector from "@/components/Inspector";
 import LessonPanel from "@/components/LessonPanel";
+import ResourceBar from "@/components/ResourceBar";
+import Toolbar from "@/components/Toolbar";
 import { deriveState } from "@/lib/animate";
+import { DURATION, EASE } from "@/lib/motion";
 import {
   buildStrategySource,
   clearAllStrategyCode,
@@ -44,6 +50,9 @@ export default function Page() {
   const [index, setIndex] = useState(-1);
   const [running, setRunning] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [celebration, setCelebration] = useState<{ key: number; title: string; subtitle?: string } | null>(null);
+  const [showInfo, setShowInfo] = useState(true);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [codeDrafts, setCodeDrafts] = useState<Record<string, string>>(() => {
     const initialObjective = FALLBACK_CATALOG.objectives[0];
     return {
@@ -111,6 +120,19 @@ export default function Page() {
   useEffect(() => {
     if (storageReady) saveFarmState(farmState);
   }, [farmState, storageReady]);
+
+  // Fire the GSAP celebration once per passing run (key bump remounts the overlay).
+  const celebrateSeq = useRef(0);
+  useEffect(() => {
+    if (!result?.objective?.passed) return;
+    celebrateSeq.current += 1;
+    const unlocks = result.newlyUnlocked ?? [];
+    setCelebration({
+      key: celebrateSeq.current,
+      title: "Objective complete!",
+      subtitle: unlocks.length ? `Unlocked ${unlocks.join(", ")}` : undefined,
+    });
+  }, [result]);
 
   const runCode = useCallback(async () => {
     const submittedFarmState = farmState;
@@ -219,41 +241,86 @@ export default function Page() {
     setCodeDrafts({});
   }, [catalog.objectives, resetPlayback]);
 
+  const runPill = (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={running ? "running" : "idle"}
+        className={`gwin-pill${running ? "" : " idle"}`}
+        initial={{ opacity: 0, y: -3 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 3 }}
+        transition={{ duration: DURATION.quick, ease: EASE.standard }}
+      >
+        {running ? "● running" : "✎ editing"}
+      </motion.span>
+    </AnimatePresence>
+  );
+
   return (
-    <main className="app">
-      <header className="topbar">
-        <h1>
-          <span className="accent">Farm Bots</span>
-        </h1>
-        <span className="tag">{objective.concept}</span>
-      </header>
+    <main className="app shell">
+      <FarmView
+        width={renderFarmState.width}
+        height={renderFarmState.height}
+        farmState={renderFarmState}
+        state={state}
+        running={running || playing}
+      />
 
-      <div className="layout">
-        <section className="col col-left">
-          <LessonPanel
-            objective={objective}
-            result={runObjective}
-            resultObjective={resultObjective}
-            progress={progress}
-            unlocked={unlocked}
-            newlyUnlocked={newlyUnlocked}
-          />
+      <ResourceBar resources={state.resources} tick={state.tick} />
+      <Toolbar onRun={runCode} onResetFarm={resetFarm} onToggleInfo={() => setShowInfo((v) => !v)} running={running} />
+
+      <div className="stage" ref={stageRef}>
+        <AnimatePresence>
+          {showInfo ? (
+            <GameWindow title="Objective" icon="✦" constraintsRef={stageRef} initial={{ x: 20, y: 56 }} width={360} closable>
+              <div className="gwin-pad">
+                <LessonPanel
+                  objective={objective}
+                  result={runObjective}
+                  resultObjective={resultObjective}
+                  progress={progress}
+                  unlocked={unlocked}
+                  newlyUnlocked={newlyUnlocked}
+                />
+              </div>
+            </GameWindow>
+          ) : null}
+        </AnimatePresence>
+
+        <GameWindow
+          title="Strategy.java"
+          constraintsRef={stageRef}
+          initial={{ x: 400, y: 56 }}
+          width={470}
+          onRun={runCode}
+          runningPill={runPill}
+        >
           <Editor value={code} onChange={handleCodeChange} />
-          <Controls
-            onRun={runCode}
-            onResetCurrent={resetCurrentCode}
-            onResetFarm={resetFarm}
-            running={running}
-            objective={objective}
-          />
-          <ConsolePanel result={result} />
-        </section>
+          <div className="gwin-pad">
+            <Controls
+              onRun={runCode}
+              onResetCurrent={resetCurrentCode}
+              onResetFarm={resetFarm}
+              running={running}
+              objective={objective}
+            />
+          </div>
+        </GameWindow>
 
-        <section className="col col-right">
-          <FarmView width={renderFarmState.width} height={renderFarmState.height} farmState={renderFarmState} state={state} />
-          <Inspector state={state} farmState={farmState} objective={objective} result={result} />
-        </section>
+        <GameWindow title="Inspector" icon="◉" constraintsRef={stageRef} initial={{ x: 892, y: 96 }} width={340}>
+          <div className="gwin-pad">
+            <Inspector state={state} farmState={farmState} objective={objective} result={result} />
+          </div>
+        </GameWindow>
+
+        <GameWindow title="Console" icon="›_" constraintsRef={stageRef} initial={{ x: 400, y: 612 }} width={430}>
+          <div className="gwin-pad">
+            <ConsolePanel result={result} />
+          </div>
+        </GameWindow>
       </div>
+
+      {celebration ? <Celebration key={celebration.key} title={celebration.title} subtitle={celebration.subtitle} /> : null}
     </main>
   );
 }

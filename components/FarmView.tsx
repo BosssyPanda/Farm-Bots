@@ -15,6 +15,8 @@ function phaseLabel(state: DerivedState): string {
   return "working";
 }
 
+// Full-bleed farm: a fixed background layer the floating windows sit on top of,
+// matching the real game where the farm fills the world behind the code panels.
 export default function FarmView({
   width,
   height,
@@ -32,42 +34,27 @@ export default function FarmView({
   const label = phaseLabel(state);
 
   return (
-    <div className="panel window farm">
-      <div className="win-bar">
-        <div className="win-lights">
-          <i />
-          <i />
-          <i />
-        </div>
-        <span className="win-title">farm.live</span>
-        <span className="win-spacer" />
-        <span className={`win-pill${running ? "" : " idle"}`}>{running ? "● running" : `tick ${state.tick}`}</span>
+    <div className="farm-backdrop" aria-hidden={false}>
+      <PixelFarm width={width} height={height} state={state} farmState={farmState} running={running} />
+
+      <div className="hud left">
+        {farmState.width} &times; {farmState.height} plots
       </div>
 
-      <div className="win-body">
-        <div className="farm-stage">
-          <PixelFarm width={width} height={height} state={state} farmState={farmState} running={running} />
-
-          <div className="hud left">
-            {farmState.width} &times; {farmState.height} plots
-          </div>
-
-          <div className="hud right">
-            <motion.div className="hud-label" key={label} variants={hudTick} initial="hidden" animate="show">
-              {label}
-            </motion.div>
-            <div className="hud-count">
-              <motion.span key={harvested} variants={hudTick} initial="hidden" animate="show" style={{ display: "inline-block" }}>
-                {harvested}
-              </motion.span>{" "}
-              <span className="unit">crops</span>
-            </div>
-          </div>
-
-          <div className="farm-scanlines" />
-          <div className="farm-vignette" />
+      <div className="hud right">
+        <motion.div className="hud-label" key={label} variants={hudTick} initial="hidden" animate="show">
+          {running ? label : "ready"}
+        </motion.div>
+        <div className="hud-count">
+          <motion.span key={harvested} variants={hudTick} initial="hidden" animate="show" style={{ display: "inline-block" }}>
+            {harvested}
+          </motion.span>{" "}
+          <span className="unit">crops</span>
         </div>
       </div>
+
+      <div className="farm-scanlines" />
+      <div className="farm-vignette" />
     </div>
   );
 }

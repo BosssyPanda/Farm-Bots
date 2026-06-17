@@ -1,5 +1,7 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
+import { DURATION, EASE } from "@/lib/motion";
 import type { RunResponse } from "@/lib/types";
 
 export default function ConsolePanel({ result }: { result: RunResponse | null }) {
@@ -27,7 +29,18 @@ export default function ConsolePanel({ result }: { result: RunResponse | null })
       <div className="panel-head">
         <h2>Console</h2>
       </div>
-      <pre className={`console-body ${tone}`}>{body}</pre>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.pre
+          key={`${tone}:${body}`}
+          className={`console-body ${tone}`}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: DURATION.quick, ease: EASE.standard }}
+        >
+          {body}
+        </motion.pre>
+      </AnimatePresence>
     </div>
   );
 }

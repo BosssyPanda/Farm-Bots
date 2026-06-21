@@ -90,8 +90,12 @@ export default function IslandFarm({
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x8aa6bd, 32, 72);
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.3;
+    try {
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environmentIntensity = 0.3;
+    } catch {
+      scene.environmentIntensity = 0.18;
+    }
 
     // GLSL gradient sky dome
     const sky = new THREE.Mesh(
@@ -255,22 +259,15 @@ export default function IslandFarm({
       su.sunGlow.value = smooth(-0.05, 0.3, e);
     }
 
-    // ---------- post FX: GTAO + bloom + god-rays + warm grade/vignette (kept subtle) ----------
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const gtao = new GTAOPass(scene, camera, VW, VH);
-    try {
-      gtao.updateGtaoMaterial({ radius: 0.3, scale: 0.7, samples: 16 }); // softer AO — no mottled wash
-    } catch {
-      /* GTAO params optional */
-    }
-    try {
-      (gtao as unknown as { blendIntensity: number }).blendIntensity = 0.6;
-    } catch {
-      /* optional */
-    }
-    composer.addPass(gtao);
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(VW, VH), 0.1, 0.55, 0.92)); // gentle bloom
+    // ---------- post FX: GTAO + bloom + god-rays + warm grade/vignette (best effort) ----------
+    // Keep the island scene on screen even when a public browser/GPU rejects one
+    // optional post-processing pass. Only WebGL renderer creation is a real fatal
+    // error for this component.
+    let composer: EffectComposer | null = null;
+    let gtao: GTAOPass | null = null;
+    let godrays: ShaderPass | null = null;
+    let gradePass: ShaderPass | null = null;
+    let renderFrame = () => renderer.render(scene, camera);
     // volumetric god-rays: radial light-scatter from the sun's screen position.
     const GodRays = {
       uniforms: { tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.75) }, uIntensity: { value: 0.0 }, uDecay: { value: 0.95 }, uDensity: { value: 0.75 }, uWeight: { value: 0.4 } },
@@ -293,10 +290,7 @@ export default function IslandFarm({
           gl_FragColor = vec4(base + sum * uIntensity, 1.0);
         }`,
     };
-    const godrays = new ShaderPass(GodRays);
-    composer.addPass(godrays);
     // (tilt-shift DOF removed — the whole screen stays sharp)
-    composer.addPass(new OutputPass());
     const GradeShader = {
       uniforms: { tDiffuse: { value: null }, uTime: { value: 0 } },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
@@ -314,16 +308,76 @@ export default function IslandFarm({
           gl_FragColor = vec4(c, 1.0);
         }`,
     };
-    const gradePass = new ShaderPass(GradeShader);
-    composer.addPass(gradePass);
+    try {
+      composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      try {
+        gtao = new GTAOPass(scene, camera, VW, VH);
+        try {
+          gtao.updateGtaoMaterial({ radius: 0.3, scale: 0.7, samples: 16 }); // softer AO — no mottled wash
+        } catch {
+          /* GTAO params optional */
+        }
+        try {
+          (gtao as unknown as { blendIntensity: number }).blendIntensity = 0.6;
+        } catch {
+          /* optional */
+        }
+        composer.addPass(gtao);
+      } catch {
+        gtao = null;
+      }
+      try {
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(VW, VH), 0.1, 0.55, 0.92)); // gentle bloom
+      } catch {
+        /* bloom optional */
+      }
+      try {
+        godrays = new ShaderPass(GodRays);
+        composer.addPass(godrays);
+      } catch {
+        godrays = null;
+      }
+      try {
+        composer.addPass(new OutputPass());
+      } catch {
+        /* output pass optional */
+      }
+      try {
+        gradePass = new ShaderPass(GradeShader);
+        composer.addPass(gradePass);
+      } catch {
+        gradePass = null;
+      }
+      renderFrame = () => {
+        if (!composer) {
+          renderer.render(scene, camera);
+          return;
+        }
+        try {
+          composer.render();
+        } catch {
+          composer = null;
+          gtao = null;
+          godrays = null;
+          gradePass = null;
+          renderer.render(scene, camera);
+        }
+      };
+    } catch {
+      composer = null;
+      gtao = null;
+      godrays = null;
+      gradePass = null;
+    }
 
     function resize() {
       const s = sizeOf();
       VW = s.w;
       VH = s.h;
       renderer.setSize(VW, VH, false);
-      composer.setSize(VW, VH);
-      gtao.setSize(VW, VH);
+      composer?.setSize(VW, VH);
+      gtao?.setSize(VW, VH);
       camera.aspect = VW / VH;
       camera.updateProjectionMatrix();
     }
@@ -1297,15 +1351,17 @@ export default function IslandFarm({
       }
       } // end ambient block (frozen under reduced motion)
 
-      gradePass.uniforms.uTime.value = t;
+      if (gradePass) gradePass.uniforms.uTime.value = t;
       // ambient wheat wind (frozen under reduced motion)
       windUniforms.uTime.value = t;
       windUniforms.uWind.value = animate ? 0.18 : 0;
-      const sp = sun3.position.clone().project(camera);
-      godrays.uniforms.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
-      godrays.uniforms.uIntensity.value = sp.z < 1 ? dayFactor * (0.12 + sunsetFactor * 0.95) : 0.0;
+      if (godrays) {
+        const sp = sun3.position.clone().project(camera);
+        godrays.uniforms.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
+        godrays.uniforms.uIntensity.value = sp.z < 1 ? dayFactor * (0.12 + sunsetFactor * 0.95) : 0.0;
+      }
       controls.update();
-      composer.render();
+      renderFrame();
       if (!readyFired) {
         readyFired = true;
         cbRef.current.onReady?.();
@@ -1324,7 +1380,7 @@ export default function IslandFarm({
       if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
-      composer.dispose();
+      composer?.dispose();
       pmrem.dispose();
       renderer.dispose();
       scene.traverse((o) => {
@@ -1336,6 +1392,11 @@ export default function IslandFarm({
       });
     };
     } catch {
+      try {
+        renderer.dispose();
+      } catch {
+        /* ignore cleanup failure */
+      }
       // any unexpected init failure → let FarmView drop to the 2D fallback
       cbRef.current.onError?.();
     }

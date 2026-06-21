@@ -22,7 +22,6 @@ function phaseLabel(state: DerivedState): string {
 
 function canRender3D(): boolean {
   if (typeof window === "undefined") return false;
-  if (window.matchMedia("(max-width: 900px)").matches) return false; // mobile → 2D fallback
   try {
     const c = document.createElement("canvas");
     return !!(c.getContext("webgl2") || c.getContext("webgl"));
@@ -32,9 +31,10 @@ function canRender3D(): boolean {
 }
 
 // Full-bleed farm: a fixed background layer the floating windows sit on top of.
-// Renders the 3D floating-island scene on capable desktops, falling back to the
-// crisp 2D canvas on mobile / no-WebGL. Starts on the 2D path so server and first
-// client render match (no hydration mismatch), then upgrades after mount.
+// Renders the 3D floating-island scene whenever WebGL is available, falling back
+// to the crisp 2D canvas only when the browser cannot create a WebGL renderer.
+// Starts on the 2D path so server and first client render match, then upgrades
+// after mount.
 export default function FarmView({
   width,
   height,
@@ -51,33 +51,17 @@ export default function FarmView({
   const [use3D, setUse3D] = useState(false);
   const [failed, setFailed] = useState(false);
   const backdropRef = useRef<HTMLDivElement | null>(null);
-  const readyRef = useRef(false);
 
   useEffect(() => {
-    const update = () => setUse3D(canRender3D());
-    update();
-    const mq = window.matchMedia("(max-width: 900px)");
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    const frame = window.requestAnimationFrame(() => setUse3D(canRender3D()));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // Ready/error handshake: the island calls onReady once it has rendered a frame,
-  // and onError on a real failure. We fall back to the 2D farm only on onError, or
-  // if onReady never fires within a long safety window (genuine hang / failed chunk
-  // load) — NOT just because the heavy three bundle was slow to initialise.
-  const handleReady = useCallback(() => {
-    readyRef.current = true;
-  }, []);
+  // and onError only when WebGL itself cannot start. Slow chunk startup should not
+  // permanently downgrade the public build to the simpler canvas view.
+  const handleReady = useCallback(() => undefined, []);
   const handleError = useCallback(() => setFailed(true), []);
-
-  useEffect(() => {
-    if (!use3D) return;
-    readyRef.current = false;
-    const t = setTimeout(() => {
-      if (!readyRef.current) setFailed(true);
-    }, 30000);
-    return () => clearTimeout(t);
-  }, [use3D]);
 
   const harvested = Object.values(state.resources).reduce((sum, n) => sum + (Number(n) || 0), 0);
   const label = phaseLabel(state);

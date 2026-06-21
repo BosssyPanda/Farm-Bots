@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { CROP_TINT } from "@/lib/farmPalette";
+import ResourceIcon from "@/components/ResourceIcon";
 import { hudTick } from "@/lib/motion";
 
 function fmt(n: number): string {
@@ -10,12 +10,8 @@ function fmt(n: number): string {
   return String(n);
 }
 
-function glyphColor(name: string): string {
-  return CROP_TINT[name.toUpperCase()]?.body ?? "#e0962e";
-}
-
-// Top-left resource strip, like the real game's icon bar: a pixel chip per
-// harvested resource plus the live tick. Counts pop on change via Motion.
+// Top-left resource strip, like the real game's icon bar: a pixel item glyph
+// per harvested resource plus the live tick. Counts pop on change via Motion.
 export default function ResourceBar({
   resources,
   tick,
@@ -29,13 +25,13 @@ export default function ResourceBar({
     <div className="resbar">
       {entries.length === 0 ? (
         <span className="res-chip muted">
-          <i className="res-glyph" style={{ background: "#6aa23c" }} />
+          <ResourceIcon kind="GRASS" />
           <span className="res-val">farm idle</span>
         </span>
       ) : (
         entries.map(([name, value]) => (
           <span className="res-chip" key={name} title={name}>
-            <i className="res-glyph" style={{ background: glyphColor(name) }} />
+            <ResourceIcon kind={name} />
             <motion.span className="res-val" key={value} variants={hudTick} initial="hidden" animate="show">
               {fmt(Number(value))}
             </motion.span>

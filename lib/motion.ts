@@ -65,4 +65,17 @@ export const hudTick: Variants = {
   show: { scale: 1, opacity: 1, transition: { ...POP_SPRING } },
 };
 
+// Sub-tab content crossfade (Goal / Learn / Progress). Keyed on the active tab
+// so switching fades the body in. Reduced-motion shortens it to a near-instant.
+export const tabSwap: Variants = {
+  hidden: { opacity: 0, y: 6 },
+  show: { opacity: 1, y: 0, transition: { duration: DURATION.standard, ease: EASE.standard } },
+  exit: { opacity: 0, y: -6, transition: { duration: DURATION.quick, ease: EASE.exit } },
+};
+
+// Shared layout transition for the animated tab underline (Motion `layoutId`)
+// and for a window snapping between docked and floating positions.
+export const tabIndicator: Transition = { type: "spring", stiffness: 480, damping: 34, mass: 0.8 };
+export const dockTransition: Transition = { duration: DURATION.standard, ease: EASE.signature };
+
 export { useReducedMotion } from "motion/react";

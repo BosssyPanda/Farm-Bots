@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import type { DerivedState } from "@/lib/animate";
 import { inspectorValueClassName } from "@/lib/animate";
 import { hudTick } from "@/lib/motion";
-import type { FarmState, ObjectiveInfo, RunResponse } from "@/lib/types";
+import type { RunResponse } from "@/lib/types";
 
 // A value that re-pops whenever it changes (keyed on the rendered value).
 function LiveValue({ value }: { value: string | number | boolean }) {
@@ -22,26 +22,13 @@ function LiveValue({ value }: { value: string | number | boolean }) {
   );
 }
 
-export default function Inspector({
-  state,
-  farmState,
-  objective,
-  result,
-}: {
-  state: DerivedState;
-  farmState: FarmState;
-  objective: ObjectiveInfo;
-  result: RunResponse | null;
-}) {
+// The Inspector is the live runtime debugger only: where the drone is, the
+// variables you watch(), and what you've harvested — all updating frame by
+// frame as your code replays. Mastery + objective data live in the Objective
+// panel, so they're intentionally not duplicated here.
+export default function Inspector({ state, result }: { state: DerivedState; result: RunResponse | null }) {
   const watchEntries = Object.entries(state.watch);
   const resourceEntries = Object.entries(state.resources);
-  const activeConcept =
-    result?.objective.id === objective.id ? result.concepts[objective.concept] ?? farmState.concepts[objective.concept] : farmState.concepts[objective.concept];
-  const dataEntries = [
-    ["prices()", objective.prices],
-    ["crops()", objective.crops],
-    ["moisture()", objective.moisture],
-  ] as const;
 
   return (
     <div className="panel inspector">
@@ -50,30 +37,27 @@ export default function Inspector({
         <span className="muted small">live</span>
       </div>
 
+      <p className="inspector-help muted small">Values update tick by tick as your code runs.</p>
+
+      <div className="section-label">drone</div>
       <div className="kv">
-        <span>objective</span>
-        <b className={inspectorValueClassName(objective.id)}>{objective.id}</b>
-      </div>
-      <div className="kv">
-        <span>drone.x</span>
+        <span>x · column</span>
         <LiveValue value={state.drone.x} />
       </div>
       <div className="kv">
-        <span>drone.y</span>
+        <span>y · row</span>
         <LiveValue value={state.drone.y} />
       </div>
       <div className="kv">
         <span>carrying</span>
         <LiveValue value={state.drone.carrying} />
       </div>
-      <div className="kv">
-        <span>tick</span>
-        <LiveValue value={state.tick} />
-      </div>
 
-      <div className="section-label">watch()</div>
+      <div className="section-label">your watched variables</div>
       {watchEntries.length === 0 ? (
-        <p className="muted small">Track variables with drone.watch(&quot;name&quot;, value).</p>
+        <p className="muted small">
+          Track a value with <code>drone.watch(&quot;name&quot;, value)</code> and it shows up here.
+        </p>
       ) : (
         watchEntries.map(([key, value]) => (
           <div className="kv" key={key}>
@@ -83,7 +67,7 @@ export default function Inspector({
         ))
       )}
 
-      <div className="section-label">resources</div>
+      <div className="section-label">harvested</div>
       {resourceEntries.length === 0 ? (
         <p className="muted small">No harvested resources yet.</p>
       ) : (
@@ -95,39 +79,10 @@ export default function Inspector({
         ))
       )}
 
-      <div className="section-label">available data</div>
-      <div className="data-list">
-        {dataEntries.map(([label, values]) => (
-          <div className="kv" key={label}>
-            <span>{label}</span>
-            <b className={inspectorValueClassName(values)}>{values.length ? values.join(", ") : "empty"}</b>
-          </div>
-        ))}
+      <div className="kv">
+        <span>tick</span>
+        <LiveValue value={state.tick} />
       </div>
-
-      <div className="section-label">mastery</div>
-      {activeConcept ? (
-        <div className="insight-grid compact">
-          <div className="insight">
-            <span>streak</span>
-            <b>{activeConcept.correctStreak}</b>
-          </div>
-          <div className="insight">
-            <span>fails</span>
-            <b>{activeConcept.failCount}</b>
-          </div>
-          <div className="insight">
-            <span>mastered</span>
-            <b>{activeConcept.mastered ? "yes" : "no"}</b>
-          </div>
-          <div className="insight">
-            <span>recap</span>
-            <b>{activeConcept.recapDue ? "due" : "clear"}</b>
-          </div>
-        </div>
-      ) : (
-        <p className="muted small">Progress appears after the first run.</p>
-      )}
 
       {result && (
         <div className="run-meta muted small">

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Farm Bots — floating island reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #6d8ea8; }
+  #c { position: fixed; inset: 0; display: block; }
+  .badge { position: fixed; top: 16px; left: 16px; z-index: 5;
+    background: rgba(19,22,31,0.82); color: #f1f3f7; padding: 8px 14px; border-radius: 10px;
+    font-size: 15px; letter-spacing: .5px; font-family: "Pixelify Sans", system-ui, sans-serif;
+    border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(4px); }
+  .badge small { display:block; font-size: 11px; color:#9aa6b4; letter-spacing:1px; text-transform:uppercase; }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 6;
+    color: #20364a; font-size: 18px; letter-spacing: 1px; transition: opacity .6s; pointer-events:none;
+    font-family: "Pixelify Sans", system-ui, sans-serif; }
+  .hint { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index:5;
+    color: rgba(20,40,56,0.6); font-size: 12px; letter-spacing: 1px; font-family: "Pixelify Sans", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="badge">Floating Island<small>tilt-shift · GTAO · bloom · wind · panda</small></div>
+<div id="loading">building island…</div>
+<div class="hint">drag to orbit · scroll to zoom</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.184.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+// custom tilt-shift shader is defined inline below
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const rand = (a, b) => a + Math.random() * (b - a);
+
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x8aa6bd, 32, 72);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.3;
+
+// GLSL gradient sky dome
+const sky = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: {
+    top: { value: new THREE.Color(0xaecfe2) }, mid: { value: new THREE.Color(0x8fafc6) }, bottom: { value: new THREE.Color(0x9c8f7a) },
+    sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xffd9a0) }, sunGlow: { value: 1.0 },
+  },
+  vertexShader: `varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader: `
+    varying vec3 vP; uniform vec3 top,mid,bottom,sunDir,sunCol; uniform float sunGlow;
+    void main(){
+      vec3 dir = normalize(vP);
+      float h = dir.y * 0.5 + 0.5;
+      vec3 c = h > 0.5 ? mix(mid, top, (h - 0.5) * 2.0) : mix(bottom, mid, h * 2.0);
+      float a = max(dot(dir, sunDir), 0.0);
+      c += sunCol * (pow(a, 110.0) * 0.5 + pow(a, 7.0) * 0.1) * sunGlow;  // atmospheric sun glow (gentler at noon)
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+}));
+scene.add(sky);
+
+// sun + moon discs (bright → catch bloom) and a star field for the night
+// SUN: bright core + soft halo + wide corona (bloom turns it into a glowing sun)
+const sun3 = new THREE.Group();
+const sunCore = new THREE.Mesh(new THREE.SphereGeometry(4.4, 40, 30), new THREE.MeshBasicMaterial({ color: 0xffe7a6, fog: false, transparent: true }));
+const sunHalo = new THREE.Mesh(new THREE.SphereGeometry(8.5, 40, 30), new THREE.MeshBasicMaterial({ color: 0xffc878, fog: false, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
+const sunCorona = new THREE.Mesh(new THREE.SphereGeometry(15.0, 40, 30), new THREE.MeshBasicMaterial({ color: 0xff9a48, fog: false, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
+sun3.add(sunCore, sunHalo, sunCorona); scene.add(sun3);
+// MOON: pale body + maria + many craters + faint halo
+const moon3 = new THREE.Group();
+const moonBody = new THREE.Mesh(new THREE.SphereGeometry(3.6, 40, 30), new THREE.MeshBasicMaterial({ color: 0xe4ebf6, fog: false, transparent: true }));
+moon3.add(moonBody);
+const maria = new THREE.Mesh(new THREE.SphereGeometry(1.2, 18, 14), new THREE.MeshBasicMaterial({ color: 0xc6cfe0, fog: false, transparent: true }));
+maria.position.set(0.9, 0.6, 3.0); maria.scale.set(1.3, 1.0, 0.25); moon3.add(maria);
+for (let i = 0; i < 11; i++) { const cr = new THREE.Mesh(new THREE.SphereGeometry(rand(0.25, 0.6), 14, 12), new THREE.MeshBasicMaterial({ color: 0xbcc6da, fog: false, transparent: true })); cr.position.copy(new THREE.Vector3().randomDirection().multiplyScalar(3.45)); cr.scale.z = 0.35; cr.lookAt(0, 0, 0); moon3.add(cr); }
+const moonHalo = new THREE.Mesh(new THREE.SphereGeometry(6.0, 40, 30), new THREE.MeshBasicMaterial({ color: 0xc6cfe8, fog: false, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+moon3.add(moonHalo); scene.add(moon3);
+const starGeo = new THREE.BufferGeometry();
+const STAR_N = 320, sarr = new Float32Array(STAR_N * 3);
+for (let i = 0; i < STAR_N; i++) { const v = new THREE.Vector3().randomDirection().multiplyScalar(54); sarr[i * 3] = v.x; sarr[i * 3 + 1] = Math.abs(v.y) * 0.8 + 4; sarr[i * 3 + 2] = v.z; }
+starGeo.setAttribute("position", new THREE.BufferAttribute(sarr, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.32, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+scene.add(stars);
+
+const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(17, 13, 19);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 0.5, 0);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.enablePan = false;
+controls.minDistance = 10; controls.maxDistance = 48; controls.minPolarAngle = 0.4; controls.maxPolarAngle = 1.35;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.45;
+
+// ---------- lighting (driven by the day/night cycle) ----------
+const hemi = new THREE.HemisphereLight(0xdce9f2, 0x6f5a38, 0.45);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffcf8a, 1.25);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 60;
+const sc = sun.shadow.camera; sc.left = -9; sc.right = 9; sc.top = 9; sc.bottom = -9;
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun);
+
+// day/night: orbit the sun, recolor sky + lights + fog, fade stars/moon
+let nightFactor = 0, dayFactor = 0, sunsetFactor = 0;
+const SKY = {
+  dayTop: new THREE.Color(0xaecfe2), dayMid: new THREE.Color(0x8fafc6), dayBot: new THREE.Color(0xcbb892),
+  setTop: new THREE.Color(0x3a2c64), setMid: new THREE.Color(0xcf5536), setBot: new THREE.Color(0xffa544),
+  nightTop: new THREE.Color(0x080b18), nightMid: new THREE.Color(0x121830), nightBot: new THREE.Color(0x223052),
+};
+const sunDay = new THREE.Color(0xfff1d4), sunSet = new THREE.Color(0xff7a2e);
+const hemiDaySky = new THREE.Color(0xdce9f2), hemiNightSky = new THREE.Color(0x1c2740);
+const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const _c = new THREE.Color();
+function setDayNight(d) {
+  const ang = d * Math.PI * 2;
+  const e = Math.sin(ang);                       // sun elevation -1..1
+  sun.position.set(Math.cos(ang) * 18, e * 16, 7);
+  const dayF = smooth(-0.05, 0.32, e);           // 0 night .. 1 day
+  const setF = THREE.MathUtils.clamp(1 - Math.abs(e) / 0.33, 0, 1) * smooth(-0.25, 0.05, e);
+  nightFactor = 1 - dayF; dayFactor = dayF; sunsetFactor = setF;
+  sun.intensity = smooth(-0.04, 0.28, e) * 1.4;
+  sun.color.copy(sunDay).lerp(sunSet, setF * 0.85);
+  hemi.intensity = THREE.MathUtils.lerp(0.26, 0.5, dayF);
+  hemi.color.copy(hemiNightSky).lerp(hemiDaySky, dayF);
+  scene.environmentIntensity = THREE.MathUtils.lerp(0.17, 0.32, dayF);
+  renderer.toneMappingExposure = THREE.MathUtils.lerp(0.94, 1.05, dayF);
+  for (const pl of nightLights) pl.intensity = nightFactor * 1.5;
+  fireflies.material.opacity = nightFactor * 0.9;
+  // sky gradient
+  const u = sky.material.uniforms;
+  u.top.value.copy(SKY.nightTop).lerp(SKY.dayTop, dayF).lerp(SKY.setTop, setF * 0.62);
+  u.mid.value.copy(SKY.nightMid).lerp(SKY.dayMid, dayF).lerp(SKY.setMid, setF * 0.9);
+  u.bottom.value.copy(SKY.nightBot).lerp(SKY.dayBot, dayF).lerp(SKY.setBot, setF * 0.96);
+  scene.fog.color.copy(u.mid.value);
+  // celestial discs
+  const dir = sun.position.clone().normalize();
+  sun3.position.copy(dir).multiplyScalar(52);
+  const sop = smooth(-0.12, 0.05, e);
+  sunCore.material.color.copy(_c.copy(sunDay).lerp(sunSet, setF));
+  sunHalo.material.color.copy(sunCore.material.color);
+  sunCore.material.opacity = sop; sunHalo.material.opacity = sop * (0.3 + setF * 0.3);
+  sunCorona.material.color.copy(sunCore.material.color); sunCorona.material.opacity = sop * (0.12 + setF * 0.3);
+  moon3.position.copy(dir).multiplyScalar(-52);
+  for (const m of moon3.children) m.material.opacity = (1 - dayF) * (m === moonHalo ? 0.22 : 1);
+  stars.material.opacity = (1 - dayF) * 0.9;
+  // feed the sun into the sky-glow shader
+  const su = sky.material.uniforms;
+  su.sunDir.value.copy(dir); su.sunCol.value.copy(sunCore.material.color); su.sunGlow.value = smooth(-0.05, 0.3, e);
+}
+
+// ---------- post FX: GTAO + bloom + tilt-shift DOF + warm grade/vignette/grain ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+try { gtao.updateGtaoMaterial({ radius: 0.5, scale: 1.1, samples: 16 }); } catch (e) {}
+composer.addPass(gtao);
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.55, 0.9));
+// volumetric god-rays: radial light-scatter from the sun's screen position. Adds light only
+// (samples bright sky/sun toward the sun), so it never blurs or darkens the island.
+const GodRays = {
+  uniforms: { tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.75) }, uIntensity: { value: 0.0 }, uDecay: { value: 0.95 }, uDensity: { value: 0.75 }, uWeight: { value: 0.4 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader: `
+    varying vec2 vUv; uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uIntensity,uDecay,uDensity,uWeight;
+    const int N = 64;
+    void main(){
+      vec3 base = texture2D(tDiffuse, vUv).rgb;
+      if (uIntensity <= 0.001) { gl_FragColor = vec4(base, 1.0); return; }
+      vec2 delta = (vUv - uSun) * (uDensity / float(N));
+      vec2 coord = vUv; float illum = 1.0; vec3 sum = vec3(0.0);
+      for (int i = 0; i < N; i++) {
+        coord -= delta;
+        vec3 s = texture2D(tDiffuse, coord).rgb;
+        float lum = max(max(s.r, s.g), s.b);
+        s *= smoothstep(1.15, 2.6, lum);   // HDR threshold: ONLY the very-bright sun scatters (geometry/panda excluded)
+        sum += s * illum * uWeight; illum *= uDecay;
+      }
+      gl_FragColor = vec4(base + sum * uIntensity, 1.0);
+    }`,
+};
+const godrays = new ShaderPass(GodRays);
+composer.addPass(godrays);
+// screen-space tilt-shift (sharp horizontal band in the middle, blurred top/bottom).
+// Depth-independent, so the centred island can never blur out, but the strong
+// miniature blur on the edges is preserved.
+// custom tilt-shift: a WIDE always-sharp centre band, blur ramps in only near the
+// top/bottom edges, and the blur radius is capped — so the island (which lives in
+// the middle of the frame) can never blur out, while the miniature edge blur stays strong.
+const TiltBand = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uRes: { value: new THREE.Vector2(innerWidth, innerHeight) },
+    uCenter: { value: 0.54 }, uBand: { value: 0.3 }, uFeather: { value: 0.22 }, uMax: { value: 6.0 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader: `
+    varying vec2 vUv; uniform sampler2D tDiffuse; uniform vec2 uRes; uniform float uCenter,uBand,uFeather,uMax;
+    void main(){
+      float d = abs(vUv.y - uCenter);
+      float blur = smoothstep(uBand, uBand + uFeather, d);   // 0 in the sharp band .. 1 at edges
+      float r = blur * uMax;
+      if (r < 0.6) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
+      vec2 px = (1.0 / uRes) * r;
+      vec4 sum = vec4(0.0); float wsum = 0.0;
+      for (int i=-3;i<=3;i++) for (int j=-3;j<=3;j++) {
+        vec2 o = vec2(float(i), float(j)) / 3.0;
+        float w = 1.0 - length(o) * 0.5; if (w <= 0.0) continue;
+        sum += texture2D(tDiffuse, vUv + o * px) * w; wsum += w;
+      }
+      gl_FragColor = sum / wsum;
+    }`,
+};
+const tilt = new ShaderPass(TiltBand);
+composer.addPass(tilt);
+composer.addPass(new OutputPass());
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader: `
+    varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uTime;
+    float rnd(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      c.r += 0.05; c.b -= 0.025; c = clamp(c, 0.0, 1.0);     // warm grade
+      float l = dot(c, vec3(0.299,0.587,0.114));
+      c = mix(vec3(l), c, 1.13);                              // pop saturation
+      float d = distance(vUv, vec2(0.5, 0.46));
+      c *= smoothstep(0.92, 0.32, d);                         // vignette
+      c += (rnd(vUv * 1024.0 + uTime) - 0.5) * 0.05;          // film grain
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+};
+const gradePass = new ShaderPass(GradeShader);
+composer.addPass(gradePass);
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  gtao.setSize(innerWidth, innerHeight);
+  tilt.uniforms.uRes.value.set(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize); resize();
+
+// ---------- island ----------
+const island = new THREE.Group(); scene.add(island);
+const swayers = [];
+const COLS = 9, ROWS = 9, STEP = 1.0, TILE = 0.96, TH = 0.5;
+const SCAR_C = (COLS / 2) | 0, SCAR_R = (ROWS / 2) | 0; // scarecrow's grass tile (centre)
+const half = (n) => (n - 1) / 2;
+const grassShades = [0x6e9d4a, 0x668f43, 0x77a652, 0x5f8a3e];
+const matDirt = new THREE.MeshStandardMaterial({ color: 0x5c3c23, roughness: 1, metalness: 0, flatShading: true });
+const matSoil = new THREE.MeshStandardMaterial({ color: 0x73482a, roughness: 1, metalness: 0, flatShading: true });
+const matSoilDark = new THREE.MeshStandardMaterial({ color: 0x5e3a22, roughness: 1, metalness: 0, flatShading: true });
+const matRock = new THREE.MeshStandardMaterial({ color: 0x6a5740, roughness: 1, metalness: 0, flatShading: true });
+const isSoil = () => true; // entire island surface is farmland
+
+// island = a grid of short soil slabs; tops hoed into tilled farmland. Per-tile colour
+// variety (random dirt/soil shades + dark patches) gives texture without image maps.
+const H = 0.62; // short slab
+const sideShades = [0x8a5a34, 0x805231, 0x946239, 0x7a4d2c, 0x8f5d36];
+const topShades = [0x6e4a28, 0x664424, 0x744e2c, 0x5e3f22, 0x6b4826];
+const ridgeShades = [0x8a6038, 0x956840, 0x815a34, 0x8f6440];
+const grassTop = new THREE.MeshStandardMaterial({ color: 0x6f9d49, roughness: 1, metalness: 0, flatShading: true });
+const patchMat = new THREE.MeshStandardMaterial({ color: 0x4f351d, roughness: 1, metalness: 0, flatShading: true });
+const pick = (a) => a[(Math.random() * a.length) | 0];
+const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0, flatShading: true });
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+  const wx = (c - half(COLS)) * STEP, wz = (r - half(ROWS)) * STEP;
+  const isScare = c === SCAR_C && r === SCAR_R;
+  const side = mat(pick(sideShades));
+  const block = new THREE.Mesh(new THREE.BoxGeometry(TILE, H, TILE), [side, side, isScare ? grassTop : mat(pick(topShades)), side, side, side]);
+  block.position.set(wx, -H / 2, wz); block.castShadow = true; block.receiveShadow = true; island.add(block);
+  if (isScare) continue; // grass tile under the scarecrow — no furrows / no crops
+  const along = (c + r) % 2 === 0; const ridgeMat = mat(pick(ridgeShades));
+  for (let k = -2; k <= 2; k++) {
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(along ? TILE * 0.92 : 0.11, 0.05, along ? 0.11 : TILE * 0.92), ridgeMat);
+    if (along) fr.position.set(wx, 0.02, wz + k * 0.18); else fr.position.set(wx + k * 0.18, 0.02, wz);
+    fr.castShadow = true; fr.receiveShadow = true; island.add(fr);
+  }
+  if (Math.random() < 0.5) { const patch = new THREE.Mesh(new THREE.BoxGeometry(rand(0.12, 0.26), 0.02, rand(0.12, 0.26)), patchMat); patch.position.set(wx + rand(-0.3, 0.3), 0.045, wz + rand(-0.3, 0.3)); patch.receiveShadow = true; island.add(patch); }
+}
+// little nub feet under the rim (reference underside)
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+  const edge = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+  if (!edge || Math.random() < 0.45) continue;
+  const wx = (c - half(COLS)) * STEP, wz = (r - half(ROWS)) * STEP;
+  const nub = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.18), mat(pick(sideShades)));
+  nub.position.set(wx + rand(-0.16, 0.16), -H - 0.05, wz + rand(-0.16, 0.16)); nub.castShadow = true; island.add(nub);
+}
+
+// ---------- crops (GLTF) with wind sway ----------
+const loader = new GLTFLoader();
+const tileWorld = (c, r) => new THREE.Vector3((c - half(COLS)) * STEP, 0.02, (r - half(ROWS)) * STEP);
+function prep(root, targetH) {
+  root.traverse((o) => { if (!o.isMesh) return; o.castShadow = true; o.receiveShadow = true; const mats = Array.isArray(o.material) ? o.material : [o.material]; for (const m of mats) { if (!m) continue; m.metalness = 0; m.roughness = 0.95; m.envMapIntensity = 0.22; m.needsUpdate = true; } });
+  const b = new THREE.Box3().setFromObject(root), s = new THREE.Vector3(); b.getSize(s); root.scale.setScalar(targetH / (s.y || 1));
+  const b2 = new THREE.Box3().setFromObject(root), c = new THREE.Vector3(); b2.getCenter(c); root.position.x -= c.x; root.position.z -= c.z; root.position.y -= b2.min.y; return root;
+}
+const load = (u, h) => new Promise((res) => loader.load(u, (g) => res(prep(g.scene, h)), undefined, () => res(null)));
+
+Promise.all([load("/models/wheat.glb", 0.8)])
+.then(([wheat]) => {
+  const place = (model, c, r, o = {}, amp = 0.1) => {
+    if (!model) return; const m = model.clone(true); const p = tileWorld(c, r);
+    m.position.copy(p); m.position.x += o.dx ?? 0; m.position.z += o.dz ?? 0;
+    m.rotation.y = o.rotY ?? Math.random() * Math.PI * 2; if (o.scale) m.scale.multiplyScalar(o.scale);
+    island.add(m); swayers.push({ o: m, phase: Math.random() * 6.28, amp });
+  };
+  // fill each bed edge-to-edge on a sub-grid; inset keeps crops inside the tile (no overlap with neighbours)
+  const fillTile = (model, c, r, grid, amp) => {
+    const inset = TILE / 2 - 0.13;
+    for (let i = 0; i < grid; i++) for (let j = 0; j < grid; j++) {
+      const fx = grid === 1 ? 0 : (i / (grid - 1) - 0.5) * 2 * inset;
+      const fz = grid === 1 ? 0 : (j / (grid - 1) - 0.5) * 2 * inset;
+      place(model, c, r, { dx: fx + rand(-0.03, 0.03), dz: fz + rand(-0.03, 0.03), scale: rand(0.92, 1.12) }, amp);
+    }
+  };
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { if (c === SCAR_C && r === SCAR_R) continue; fillTile(wheat, c, r, 3, 0.14); }
+  document.getElementById("loading").style.opacity = "0";
+});
+
+// ---------- flying panda with wings + straw hat ----------
+function buildPanda() {
+  const g = new THREE.Group();
+  // smooth (non-flat) shading for a rounder, more realistic look
+  const white = new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.82, metalness: 0 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x2a2a31, roughness: 0.78, metalness: 0 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x141418, roughness: 0.5, metalness: 0 });
+  const straw = new THREE.MeshStandardMaterial({ color: 0xd7b466, roughness: 1, metalness: 0, flatShading: true });
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 28, 22), white); body.scale.set(1, 0.96, 0.88); body.castShadow = true; g.add(body);
+  // black shoulder band
+  const band = new THREE.Mesh(new THREE.SphereGeometry(0.425, 28, 22), black); band.scale.set(1.01, 0.42, 0.9); band.position.y = 0.12; g.add(band);
+
+  // arms + legs (capsules)
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.18, 6, 12), black); arm.position.set(0.34 * sx, 0.0, 0.05); arm.rotation.z = sx * 0.55; arm.castShadow = true; g.add(arm);
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.15, 6, 12), black); leg.position.set(0.19 * sx, -0.34, 0.08); leg.castShadow = true; g.add(leg);
+  }
+
+  // head + muzzle
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 22), white); head.position.set(0, 0.5, 0.12); head.castShadow = true; g.add(head);
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.15, 22, 18), white); muzzle.scale.set(1, 0.78, 0.9); muzzle.position.set(0, 0.42, 0.36); g.add(muzzle);
+  // ears
+  for (const sx of [-1, 1]) { const ear = new THREE.Mesh(new THREE.SphereGeometry(0.115, 20, 16), black); ear.scale.set(1, 1, 0.7); ear.position.set(0.2 * sx, 0.73, 0.06); ear.castShadow = true; g.add(ear); }
+  // eye patches (angled teardrops) + eyes + glints
+  for (const sx of [-1, 1]) {
+    const patch = new THREE.Mesh(new THREE.SphereGeometry(0.095, 18, 14), black); patch.scale.set(0.8, 1.35, 0.5); patch.rotation.z = sx * 0.55; patch.position.set(0.12 * sx, 0.52, 0.35); g.add(patch);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.032, 14, 12), dark); eye.position.set(0.12 * sx, 0.5, 0.42); g.add(eye);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), white); glint.position.set(0.135 * sx, 0.525, 0.44); g.add(glint);
+  }
+  // nose
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 12), dark); nose.scale.set(1.3, 0.85, 1); nose.position.set(0, 0.44, 0.49); g.add(nose);
+
+  // wings — layered tapered feathers on flap pivots
+  const wings = [];
+  for (const sx of [-1, 1]) {
+    const pivot = new THREE.Group(); pivot.position.set(0.3 * sx, 0.14, -0.06); g.add(pivot);
+    for (let f = 0; f < 3; f++) { const feat = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), black); feat.scale.set(0.09, 0.52 - f * 0.09, 0.95 - f * 0.16); feat.position.set(0.34 * sx, -f * 0.05, -0.04 - f * 0.14); feat.castShadow = true; pivot.add(feat); }
+    wings.push({ pivot, sx });
+  }
+
+  // straw hat
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.04, 22), straw); brim.position.set(0, 0.74, 0.08); brim.castShadow = true; g.add(brim);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.23, 0.26, 22), straw); cone.position.set(0, 0.88, 0.08); cone.castShadow = true; g.add(cone);
+
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.11, 18, 14), white); tail.position.set(0, -0.05, -0.42); tail.castShadow = true; g.add(tail);
+  g.userData.wings = wings; g.userData.head = head; g.name = "panda";
+  return g;
+}
+const panda = buildPanda(); panda.position.set(0, 2.4, 0); island.add(panda);
+
+// ---------- clouds + birds + pollen ----------
+const clouds = new THREE.Group(); scene.add(clouds);
+for (let i = 0; i < 11; i++) {
+  const cl = new THREE.Group(); const m = new THREE.MeshStandardMaterial({ color: 0xf5f8fc, roughness: 1, metalness: 0, flatShading: true });
+  for (let j = 0; j < 8; j++) { const puff = new THREE.Mesh(new THREE.SphereGeometry(rand(1.0, 2.2), 10, 8), m); puff.position.set(rand(-3.0, 3.0), rand(-0.4, 0.4), rand(-1.5, 1.5)); puff.scale.y = 0.55; cl.add(puff); }
+  const a = rand(0, 6.28), rad = rand(36, 54); cl.position.set(Math.cos(a) * rad, rand(16, 28), Math.sin(a) * rad);
+  cl.userData = { speed: rand(0.2, 0.5), rad, y: cl.position.y, ang: a }; clouds.add(cl);
+}
+const birds = new THREE.Group(); scene.add(birds);
+for (let i = 0; i < 9; i++) {
+  const b = new THREE.Group(); const m = new THREE.MeshStandardMaterial({ color: 0x2f2e36, roughness: 1, side: THREE.DoubleSide });
+  const wl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.16), m), wr = wl.clone(); wl.position.x = -0.26; wr.position.x = 0.26; b.add(wl, wr);
+  b.userData = { ang: rand(0, 6.28), rad: rand(7, 12), y: rand(5, 8), speed: rand(0.25, 0.5), wl, wr, ph: rand(0, 6.28) }; birds.add(b);
+}
+const POLLEN = 140;
+const pgeo = new THREE.BufferGeometry(); const parr = new Float32Array(POLLEN * 3);
+for (let i = 0; i < POLLEN; i++) { parr[i * 3] = rand(-6, 6); parr[i * 3 + 1] = rand(-1, 5); parr[i * 3 + 2] = rand(-6, 6); }
+pgeo.setAttribute("position", new THREE.BufferAttribute(parr, 3));
+const pollen = new THREE.Points(pgeo, new THREE.PointsMaterial({ color: 0xfff2c8, size: 0.06, transparent: true, opacity: 0.7, depthWrite: false }));
+island.add(pollen);
+
+// night lanterns (warm point lights, lit only after dark) + glowing fireflies
+const nightLights = [];
+for (const [x, z] of [[-4.2, -4.2], [4.2, -4.2], [-4.2, 4.2], [4.2, 4.2], [0, 0]]) { const pl = new THREE.PointLight(0xffce86, 0, 15, 2); pl.position.set(x, 3.0, z); island.add(pl); nightLights.push(pl); }
+const FF = 110, fgeo = new THREE.BufferGeometry(), farr = new Float32Array(FF * 3);
+for (let i = 0; i < FF; i++) { farr[i * 3] = rand(-6.6, 6.6); farr[i * 3 + 1] = rand(0.3, 3.6); farr[i * 3 + 2] = rand(-6.6, 6.6); }
+fgeo.setAttribute("position", new THREE.BufferAttribute(farr, 3));
+const fireflies = new THREE.Points(fgeo, new THREE.PointsMaterial({ color: 0xfff09a, size: 0.14, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+island.add(fireflies);
+
+// ---------- realistic scarecrow on the centre grass tile ----------
+function buildScarecrow() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6e4a26, roughness: 1, metalness: 0, flatShading: true });
+  const straw = new THREE.MeshStandardMaterial({ color: 0xd9b25a, roughness: 1, metalness: 0, flatShading: true });
+  const burlap = new THREE.MeshStandardMaterial({ color: 0xc9a468, roughness: 1, metalness: 0, flatShading: true });
+  const shirt = new THREE.MeshStandardMaterial({ color: 0xb5532f, roughness: 1, metalness: 0, flatShading: true });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.7, metalness: 0 });
+  const rope = new THREE.MeshStandardMaterial({ color: 0xb79256, roughness: 1, metalness: 0 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.9, 7), wood); post.position.y = 0.95; post.castShadow = true; g.add(post);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.5, 7), wood); bar.rotation.z = Math.PI / 2; bar.position.y = 1.45; bar.castShadow = true; g.add(bar);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.72, 12), shirt); body.position.y = 1.24; body.castShadow = true; g.add(body);
+  for (let i = 0; i < 12; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.03, rand(0.16, 0.3), 4), straw); const a = rand(0, 6.28); s.position.set(Math.cos(a) * 0.22, 0.9, Math.sin(a) * 0.18); s.rotation.set(Math.PI + rand(-0.4, 0.4), 0, rand(-0.4, 0.4)); s.castShadow = true; g.add(s); }
+  for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.025, rand(0.12, 0.22), 4), straw); s.position.set(0.72 * sx, 1.45, 0); s.rotation.set(rand(-0.6, 0.6), 0, sx * Math.PI / 2 + rand(-0.5, 0.5)); s.castShadow = true; g.add(s); }
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 14), burlap); head.scale.set(1, 1.12, 1); head.position.y = 1.78; head.castShadow = true; g.add(head);
+  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 16), rope); tie.rotation.x = Math.PI / 2; tie.position.y = 1.62; g.add(tie);
+  const stitch = (x, rot) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.018, 0.018), dark); m.position.set(x, 1.83, 0.225); m.rotation.z = rot; g.add(m); };
+  stitch(-0.09, 0.6); stitch(-0.09, -0.6); stitch(0.09, 0.6); stitch(0.09, -0.6);
+  for (let i = -2; i <= 2; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.02), dark); m.position.set(i * 0.04, 1.71, 0.235); g.add(m); }
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 18), straw); brim.position.y = 1.97; brim.castShadow = true; g.add(brim);
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.18, 16), straw); crown.position.y = 2.06; crown.castShadow = true; g.add(crown);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.05, 16), dark); band.position.y = 2.0; g.add(band);
+  // shirt patch + buttons
+  const patch = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.02), new THREE.MeshStandardMaterial({ color: 0x8a6f3a, roughness: 1, metalness: 0, flatShading: true })); patch.position.set(-0.12, 1.2, 0.28); g.add(patch);
+  for (let i = 0; i < 3; i++) { const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 8), dark); btn.rotation.x = Math.PI / 2; btn.position.set(0.02, 1.36 - i * 0.13, 0.3); g.add(btn); }
+
+  // ---- detailed hanging lantern ----
+  const metal = new THREE.MeshStandardMaterial({ color: 0x2b2620, roughness: 0.45, metalness: 0.7 });
+  const lant = new THREE.Group(); lant.position.set(0.66, 1.04, 0.06); g.add(lant);
+  const mk = (geo, m, x, y, z, shadow) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); if (shadow) me.castShadow = true; lant.add(me); return me; };
+  mk(new THREE.CylinderGeometry(0.085, 0.07, 0.05, 6), metal, 0, 0.12, 0, true);   // top cap
+  mk(new THREE.ConeGeometry(0.06, 0.06, 6), metal, 0, 0.17, 0, true);               // top vent
+  mk(new THREE.CylinderGeometry(0.07, 0.088, 0.04, 6), metal, 0, -0.11, 0, true);   // base
+  for (const [px, pz] of [[-0.052, -0.052], [0.052, -0.052], [-0.052, 0.052], [0.052, 0.052]]) mk(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 4), metal, px, 0, pz, false); // corner posts
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.17, 0.085), new THREE.MeshStandardMaterial({ color: 0xffd089, emissive: 0xff9a2e, emissiveIntensity: 1.3, transparent: true, opacity: 0.82, roughness: 0.3 })); lant.add(glass);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.08, 8), new THREE.MeshBasicMaterial({ color: 0xffe07a })); flame.position.y = -0.02; lant.add(flame);
+  mk(new THREE.TorusGeometry(0.03, 0.008, 6, 12), metal, 0, 0.2, 0, false);          // ring handle
+  const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.46, 4), metal); chain.position.set(-0.04, 0.42, 0.0); chain.rotation.z = 0.18; lant.add(chain);
+  const llight = new THREE.PointLight(0xffb24d, 0, 6, 2); lant.add(llight);
+
+  // two small pumpkins at the base
+  const pkMat = new THREE.MeshStandardMaterial({ color: 0xe07b32, roughness: 1, metalness: 0, flatShading: true });
+  for (const [px, pz, s] of [[0.34, 0.26, 1.0], [0.16, 0.42, 0.7]]) { const pk = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 10), pkMat); pk.scale.set(1.3 * s, 0.9 * s, 1.3 * s); pk.position.set(px, 0.16 * s, pz); pk.castShadow = true; g.add(pk); }
+
+  g.userData.light = llight;
+  g.userData.lantern = { light: llight, glass: glass.material, flame };
+  return g;
+}
+const scarecrow = buildScarecrow();
+scarecrow.position.set((SCAR_C - half(COLS)) * STEP, 0.0, (SCAR_R - half(ROWS)) * STEP);
+island.add(scarecrow);
+nightLights.push(scarecrow.userData.light);
+
+// ---------- edges: grassy overhang lip + rock base band + hanging roots + rim pebbles ----------
+const lip = new THREE.Mesh(new THREE.BoxGeometry(COLS * STEP + 0.2, 0.12, ROWS * STEP + 0.2), new THREE.MeshStandardMaterial({ color: 0x6f9d49, roughness: 1, metalness: 0, flatShading: true }));
+lip.position.y = -0.05; lip.castShadow = true; lip.receiveShadow = true; island.add(lip);
+const baseBand = new THREE.Mesh(new THREE.BoxGeometry(COLS * STEP + 0.08, 0.16, ROWS * STEP + 0.08), new THREE.MeshStandardMaterial({ color: 0x5a4026, roughness: 1, metalness: 0, flatShading: true }));
+baseBand.position.y = -0.66; baseBand.castShadow = true; baseBand.receiveShadow = true; island.add(baseBand);
+const rootMat = new THREE.MeshStandardMaterial({ color: 0x49331f, roughness: 1, metalness: 0 });
+const pebMat = new THREE.MeshStandardMaterial({ color: 0x8d8576, roughness: 1, metalness: 0, flatShading: true });
+{ const rim = half(COLS) * STEP + 0.42;
+  for (let i = 0; i < 26; i++) { const side = i % 4; const t = rand(-rim, rim); let x, z; if (side === 0) { x = t; z = -rim; } else if (side === 1) { x = t; z = rim; } else if (side === 2) { x = -rim; z = t; } else { x = rim; z = t; }
+    if (Math.random() < 0.5) { const len = rand(0.3, 1.1); const root = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.045, len, 5), rootMat); root.position.set(x, -0.55 - len / 2, z); root.rotation.set(rand(-0.2, 0.2), 0, rand(-0.2, 0.2)); root.castShadow = true; island.add(root); }
+    else { const p = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.05, 0.13), 0), pebMat); p.position.set(x * 0.96, 0.03, z * 0.96); p.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3)); p.castShadow = true; island.add(p); } }
+}
+
+// ---------- perimeter post-and-rail fence with a gate ----------
+const fenceWood = new THREE.MeshStandardMaterial({ color: 0x6e4a26, roughness: 1, metalness: 0, flatShading: true });
+{ const edge = half(COLS) * STEP + 0.5, N = COLS, gateIdx = (N / 2) | 0;
+  const post = (x, z, h) => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, h, 0.07), fenceWood); p.position.set(x, h / 2 - 0.05, z); p.castShadow = true; p.receiveShadow = true; island.add(p); };
+  const rail = (x, z, len, horiz, y) => { const r = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.05, 0.05, horiz ? 0.05 : len), fenceWood); r.position.set(x, y, z); r.castShadow = true; island.add(r); };
+  for (let i = 0; i <= N; i++) { const t = (i - N / 2) * STEP; post(t, -edge, 0.55); post(t, edge, 0.55); post(-edge, t, 0.55); post(edge, t, 0.55); }
+  for (let i = 0; i < N; i++) { const mid = (i - N / 2 + 0.5) * STEP; const gate = i === gateIdx - 1 || i === gateIdx;
+    for (const y of [0.1, 0.32]) { if (!gate) rail(mid, -edge, STEP, true, y); rail(mid, edge, STEP, true, y); rail(-edge, mid, STEP, false, y); rail(edge, mid, STEP, false, y); } }
+  const gx = (gateIdx - N / 2) * STEP; post(gx - STEP / 2, -edge, 0.72); post(gx + STEP / 2, -edge, 0.72);
+}
+
+// ---------- crows (perched, occasional flap) ----------
+const crows = [];
+function buildCrow() {
+  const g = new THREE.Group(); const b = new THREE.MeshStandardMaterial({ color: 0x1b1a20, roughness: 0.85, metalness: 0, flatShading: true });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), b); body.scale.set(1, 0.9, 1.4); body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), b); head.position.set(0, 0.09, 0.12); g.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 6), new THREE.MeshStandardMaterial({ color: 0xe0a82e, roughness: 1, flatShading: true })); beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.09, 0.23); g.add(beak);
+  const wings = []; for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), b); w.scale.set(0.4, 0.08, 0.7); w.position.set(0.12 * sx, 0.02, 0); w.castShadow = true; g.add(w); wings.push({ w, sx }); }
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), b); tail.scale.set(0.5, 0.1, 1.0); tail.position.set(0, 0, -0.18); g.add(tail);
+  g.userData.wings = wings; g.userData.ph = rand(0, 6.28); return g;
+}
+{ const c1 = buildCrow(); c1.position.copy(scarecrow.position).add(new THREE.Vector3(-0.72, 1.5, 0)); c1.rotation.y = -0.6; island.add(c1); crows.push(c1);
+  const c2 = buildCrow(); c2.position.set(half(COLS) * STEP + 0.5, 0.52, (2 - half(ROWS)) * STEP); c2.rotation.y = 2.3; island.add(c2); crows.push(c2); }
+
+// ---------- butterflies (drift over the field by day) ----------
+const butterflies = [];
+const bflyCols = [0xffd24a, 0xe2674f, 0x6fa8e0, 0xe28ad0, 0xffffff];
+for (let i = 0; i < 16; i++) {
+  const g = new THREE.Group(); const m = new THREE.MeshStandardMaterial({ color: bflyCols[i % bflyCols.length], roughness: 0.8, metalness: 0, side: THREE.DoubleSide, transparent: true, flatShading: true });
+  const wings = []; for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.09, 6), m); w.position.x = 0.05 * sx; wings.push({ w, sx }); g.add(w); }
+  g.userData = { wings, mat: m, ph: rand(0, 6.28), rad: rand(2, 6), sp: rand(0.25, 0.55), yb: rand(0.9, 2.4) };
+  island.add(g); butterflies.push(g);
+}
+
+// ---------- shooting stars (night) ----------
+const shootingStars = []; let ssTimer = 0;
+
+// gold sparkle trail from the panda
+const coins = []; const coinGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.02, 12);
+const coinMat = new THREE.MeshStandardMaterial({ color: 0xf4cf52, metalness: 0.2, roughness: 0.5, emissive: 0xc28a1c, emissiveIntensity: 0.9 });
+function spawnCoin(p) { const m = new THREE.Mesh(coinGeo, coinMat); m.position.copy(p); m.rotation.x = Math.PI / 2; m.userData = { vy: -rand(0.6, 1.1), life: 0, spin: rand(2, 5) }; m.castShadow = true; island.add(m); coins.push(m); if (coins.length > 36) island.remove(coins.shift()); }
+
+// ---------- animate ----------
+const clock = new THREE.Clock(); let coinT = 0;
+const CYCLE = 900; // seconds per full day↔night (15 min)
+setDayNight(0.3);  // start mid-morning
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  island.position.y = Math.sin(t * 0.7) * 0.18;
+  setDayNight((t / CYCLE + 0.28) % 1);
+  stars.rotation.y = t * 0.006;
+
+  for (const s of swayers) s.o.rotation.z = Math.sin(t * 1.6 + s.phase) * s.amp;
+
+  // panda: orbit + bob + bank + flapping wings + sparkle trail
+  panda.position.x = Math.cos(t * 0.55) * 1.8;
+  panda.position.z = Math.sin(t * 0.55) * 1.8;
+  panda.position.y = 2.4 + Math.sin(t * 2.0) * 0.14;
+  panda.rotation.y = -t * 0.55;
+  panda.rotation.z = Math.sin(t * 0.55) * 0.18;
+  const flap = 0.35 + Math.sin(t * 12) * 0.6;
+  for (const w of panda.userData.wings) w.pivot.rotation.z = w.sx * flap;
+  if (panda.userData.head) panda.userData.head.rotation.x = Math.sin(t * 1.6) * 0.07;
+  coinT += dt; if (coinT > 0.22) { coinT = 0; spawnCoin(panda.getWorldPosition(new THREE.Vector3()).sub(island.position).add(new THREE.Vector3(0, -0.2, 0))); }
+  for (let i = coins.length - 1; i >= 0; i--) { const m = coins[i]; m.userData.life += dt; m.position.y += m.userData.vy * dt; m.rotation.z += m.userData.spin * dt; const a = 1 - m.userData.life / 1.3; m.scale.setScalar(Math.max(0.001, a)); if (m.userData.life > 1.3) { island.remove(m); coins.splice(i, 1); } }
+
+  // clouds drift
+  for (const cl of clouds.children) { cl.userData.ang += cl.userData.speed * dt * 0.06; cl.position.x = Math.cos(cl.userData.ang) * cl.userData.rad; cl.position.z = Math.sin(cl.userData.ang) * cl.userData.rad; }
+  // birds fly + flap
+  for (const b of birds.children) { const u = b.userData; u.ang += u.speed * dt * 0.12; b.position.set(Math.cos(u.ang) * u.rad, u.y + Math.sin(t + u.ph) * 0.3, Math.sin(u.ang) * u.rad); b.rotation.y = -u.ang; const fl = Math.sin(t * 9 + u.ph) * 0.6; u.wl.rotation.z = 0.3 + fl; u.wr.rotation.z = -0.3 - fl; }
+  // pollen drift up
+  const pa = pollen.geometry.attributes.position;
+  for (let i = 0; i < POLLEN; i++) { let y = pa.getY(i) + dt * 0.25; if (y > 5) y = -1; pa.setY(i, y); pa.setX(i, pa.getX(i) + Math.sin(t * 0.5 + i) * dt * 0.05); }
+  pa.needsUpdate = true;
+  const fa = fireflies.geometry.attributes.position;
+  for (let i = 0; i < FF; i++) { fa.setX(i, fa.getX(i) + Math.sin(t * 0.6 + i) * dt * 0.12); fa.setY(i, fa.getY(i) + Math.cos(t * 0.5 + i * 1.3) * dt * 0.08); }
+  fa.needsUpdate = true;
+  fireflies.material.opacity = nightFactor * 0.9 * (0.55 + 0.45 * Math.sin(t * 3.2));
+
+  // lantern flame flicker
+  const L = scarecrow.userData.lantern;
+  const flick = 0.78 + Math.sin(t * 11) * 0.13 + Math.sin(t * 23.7) * 0.06;
+  L.glass.emissiveIntensity = (0.55 + nightFactor * 1.5) * flick;
+  L.light.intensity = nightFactor * 1.7 * flick;
+  L.flame.scale.set(1 + Math.sin(t * 17) * 0.12, 0.8 + Math.sin(t * 14) * 0.22, 1);
+
+  // crows: mostly folded wings, occasional flap
+  for (const cw of crows) { const f = Math.sin(t * 9 + cw.userData.ph); const a = 0.08 + Math.max(0, f) * 0.5; for (const wg of cw.userData.wings) wg.w.rotation.z = wg.sx * a; }
+
+  // butterflies drift over the field by day
+  for (const bf of butterflies) { const u = bf.userData; const a = t * u.sp + u.ph; bf.position.set(Math.cos(a) * u.rad, u.yb + Math.sin(t * 1.5 + u.ph) * 0.4, Math.sin(a) * u.rad); bf.rotation.y = -a; const fl = Math.sin(t * 16 + u.ph) * 0.9; for (const wg of u.wings) wg.w.rotation.y = wg.sx * (0.5 + fl); u.mat.opacity = dayFactor * 0.95; bf.visible = dayFactor > 0.05; }
+
+  // shooting stars at night
+  ssTimer += dt;
+  if (nightFactor > 0.55 && ssTimer > 2.2 && Math.random() < 0.45) { ssTimer = 0; const m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, fog: false })); m.position.set(rand(-22, 22), rand(14, 22), rand(-20, -6)); m.userData = { vel: new THREE.Vector3(rand(-7, -3), rand(-3.5, -1.5), rand(2, 6)), life: 0, max: rand(0.7, 1.3) }; scene.add(m); shootingStars.push(m); }
+  for (let i = shootingStars.length - 1; i >= 0; i--) { const m = shootingStars[i]; m.userData.life += dt; m.position.addScaledVector(m.userData.vel, dt); m.material.opacity = 1 - m.userData.life / m.userData.max; m.scale.set(1, 1, 1 + (m.userData.life / m.userData.max) * 9); if (m.userData.life > m.userData.max) { scene.remove(m); shootingStars.splice(i, 1); } }
+
+  gradePass.uniforms.uTime.value = t;
+  // aim god-rays at the sun's screen position; fade with daylight, off when behind camera
+  const sp = sun3.position.clone().project(camera);
+  godrays.uniforms.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
+  godrays.uniforms.uIntensity.value = sp.z < 1 ? dayFactor * (0.12 + sunsetFactor * 0.95) : 0.0;
+  controls.update();
+  composer.render();
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>

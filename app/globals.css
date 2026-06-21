@@ -447,6 +447,20 @@ h2,
   color: var(--muted);
 }
 
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-family: var(--font-display);
+  letter-spacing: 0.3px;
+}
+
+.btn.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ===== Editor ===== */
 .editor .code {
   width: 100%;
@@ -734,12 +748,12 @@ h2,
   min-height: 100vh;
 }
 
-/* full-bleed farm sits behind everything */
+/* full-bleed farm sits behind everything (sky fallback before canvas paints) */
 .farm-backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--farm-bg);
+  background: linear-gradient(180deg, #8fb6cf 0%, #b7cfdc 100%);
   overflow: hidden;
 }
 
@@ -748,12 +762,47 @@ h2,
   height: 100%;
 }
 
-/* the layer floating windows live in / are dragged within */
+/* 3D island canvas: fill the backdrop, smooth (not pixelated) rendering */
+.farm-backdrop .island3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+}
+
+/* the layer floating windows live in / are dragged within.
+   pointer-events:none lets clicks on empty areas fall through to the farm canvas
+   below (OrbitControls drag/zoom); the real controls re-enable events. */
 .stage {
   position: relative;
   z-index: 1;
   min-height: 100vh;
   padding: 64px 18px 32px;
+  pointer-events: none;
+}
+
+.gwin,
+.resbar,
+.toolbar {
+  pointer-events: auto;
+}
+
+/* faint world-name watermark over the farm, behind the windows */
+.world-name {
+  position: absolute;
+  top: 12%;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 64px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.16);
+  text-shadow: 0 2px 8px rgba(20, 30, 40, 0.25);
+  pointer-events: none;
+  user-select: none;
 }
 
 /* top-left resource strip */
@@ -835,6 +884,11 @@ h2,
   color: #fff;
 }
 
+.tool-btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .tool-btn:disabled {
   opacity: 0.55;
   cursor: default;
@@ -845,14 +899,16 @@ h2,
   outline-offset: 2px;
 }
 
-/* the windows themselves */
+/* the windows themselves — translucent "lens" glass over the farm */
 .gwin {
   position: absolute;
-  background: var(--window);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: rgba(20, 24, 36, 0.62);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 22px 54px -22px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 22px 54px -22px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   max-width: calc(100vw - 36px);
 }
 
@@ -862,7 +918,7 @@ h2,
   gap: 9px;
   height: 36px;
   padding: 0 10px;
-  background: var(--titlebar);
+  background: rgba(14, 17, 27, 0.55);
   border-bottom: 1px solid var(--border-soft);
   cursor: grab;
   touch-action: none;
@@ -940,8 +996,22 @@ h2,
 }
 
 .gwin-body {
-  max-height: 72vh;
+  max-height: 60vh;
   overflow: auto;
+  opacity: 1;
+  transition: max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease;
+}
+
+.gwin-body.min {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gwin-body {
+    transition: none;
+  }
 }
 
 .gwin-pad {
@@ -980,6 +1050,11 @@ h2,
     padding: 60px 12px 28px;
   }
 
+  /* flatten the side rails so windows stack in one column on mobile */
+  .dock-rail {
+    display: contents;
+  }
+
   .gwin {
     position: relative !important;
     left: auto !important;
@@ -988,4 +1063,557 @@ h2,
     max-width: 100%;
     transform: none !important;
   }
+}
+
+/* ===== Docked rails (desktop) ===== */
+.dock-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) 1fr minmax(320px, 384px);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .dock-rail.left {
+    grid-column: 1;
+  }
+
+  .dock-rail.right {
+    grid-column: 3;
+  }
+}
+
+/* a docked window sits in normal flow, filling its rail; a floating one keeps
+   the absolute / draggable behavior from the base .gwin rule */
+.gwin.docked {
+  position: static;
+  width: 100% !important;
+  max-width: 100%;
+}
+
+/* ===== Objective sub-tabs ===== */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.tabbar-btn {
+  position: relative;
+  flex: 1;
+  padding: 8px 6px 10px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.tabbar-btn:hover {
+  color: var(--ink-dim);
+}
+
+.tabbar-btn.active {
+  color: var(--ink);
+}
+
+.tabbar-btn:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.tabbar-underline {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.tab-body {
+  margin-top: 4px;
+}
+
+.learn-summary {
+  margin: 12px 0 4px;
+  color: var(--accent2);
+  font-size: 13.5px;
+  font-style: italic;
+}
+
+.back-link {
+  margin: 10px 0 2px;
+  font-size: 12px;
+}
+
+.walkthrough {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.walkthrough li {
+  counter-increment: step;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px 8px 30px;
+  position: relative;
+  border-radius: 8px;
+  background: var(--titlebar);
+  border: 1px solid var(--border-soft);
+}
+
+.walkthrough li::before {
+  content: counter(step);
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(224, 101, 60, 0.18);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.walkthrough code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.walk-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.mistakes {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+
+.mistakes li::marker {
+  color: var(--warn);
+}
+
+.mastery-note {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.concept-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--accent2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 11px;
+  background: rgba(224, 150, 46, 0.08);
+  cursor: pointer;
+}
+
+.concept-chip:hover {
+  border-color: var(--accent2);
+}
+
+/* ===== Inspector ===== */
+.inspector-help {
+  margin: 2px 0 10px;
+  line-height: 1.5;
+}
+
+/* ===== Concepts roadmap ===== */
+.concepts-intro {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.concepts-intro b {
+  color: var(--ink);
+}
+
+.concept-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.concept-row {
+  display: flex;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.concept-row.current {
+  border-color: rgba(224, 101, 60, 0.5);
+  background: rgba(224, 101, 60, 0.08);
+}
+
+.concept-row.locked {
+  opacity: 0.62;
+}
+
+.concept-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--ink-dim);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.concept-row.mastered .concept-num {
+  color: var(--ok);
+  background: rgba(142, 201, 106, 0.14);
+}
+
+.concept-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.concept-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.concept-row-title {
+  font-size: 13.5px;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.concept-status {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.concept-status.mastered {
+  color: var(--ok);
+}
+
+.concept-status.current {
+  color: var(--accent);
+}
+
+.concept-row-summary {
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.45;
+}
+
+.concept-row-via {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ===== Skill Drills ===== */
+.practice-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px 10px 16px;
+  border-radius: 12px;
+  background: rgba(20, 24, 36, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.8);
+  font-size: 13px;
+  color: var(--ink-dim);
+  pointer-events: auto;
+}
+
+.practice-banner.recap {
+  border-color: rgba(230, 195, 74, 0.5);
+  background: linear-gradient(180deg, rgba(230, 195, 74, 0.12), rgba(20, 24, 36, 0.92));
+}
+
+.practice-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.drill-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.drill-chip {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: capitalize;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.drill-chip:hover {
+  color: var(--ink-dim);
+}
+
+.drill-chip.active {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: rgba(224, 101, 60, 0.12);
+}
+
+.drill-chip.recap {
+  border-color: rgba(230, 195, 74, 0.5);
+}
+
+.recap-dot {
+  color: var(--warn);
+  font-size: 8px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.drill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.drill-mastery {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.drill-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.drill-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.drill-stats {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.drill-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+  padding: 12px;
+}
+
+.drill-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent2);
+  margin-bottom: 6px;
+}
+
+.drill-prompt {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.drill-code {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--titlebar);
+  border: 1px solid var(--border-soft);
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.drill-blank {
+  color: var(--accent);
+  font-style: italic;
+}
+
+.drill-choices {
+  display: grid;
+  gap: 7px;
+}
+
+.drill-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.drill-choice:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.drill-choice:disabled {
+  cursor: default;
+}
+
+.drill-choice code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.drill-choice.correct {
+  border-color: rgba(142, 201, 106, 0.6);
+  background: rgba(142, 201, 106, 0.12);
+}
+
+.drill-choice.wrong {
+  border-color: rgba(240, 130, 106, 0.6);
+  background: rgba(240, 130, 106, 0.1);
+}
+
+.choice-mark {
+  font-size: 13px;
+}
+
+.drill-choice.correct .choice-mark {
+  color: var(--ok);
+}
+
+.drill-choice.wrong .choice-mark {
+  color: var(--error);
+}
+
+.drill-input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--titlebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+}
+
+.drill-input:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+}
+
+.drill-verdict {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.drill-verdict.fail {
+  background: rgba(240, 130, 106, 0.1);
+  border: 1px solid rgba(240, 130, 106, 0.4);
+  color: var(--ink-dim);
+}
+
+.drill-explain {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.drill-explain-mark {
+  display: inline-block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ok);
+  margin-bottom: 4px;
+}
+
+.drill-explain p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  line-height: 1.5;
 }

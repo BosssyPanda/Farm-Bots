@@ -2,7 +2,139 @@ import type { ConceptProgress, FarmState, RunResponse } from "./types";
 
 const FARM_STATE_KEY = "mm-farm-state";
 const CODE_KEY_PREFIX = "mm-strategy-code:";
+const LAYOUT_KEY = "fwr_layout";
 const DEFAULT_OBJECTIVE_ID = "first-sprout";
+
+// ----- Window layout (docked by default, floatable on demand) -----
+
+export type WindowMode = "docked" | "floating";
+
+export interface WindowLayout {
+  mode: WindowMode;
+  /** Remembered floating position (absolute left/top). */
+  x?: number;
+  y?: number;
+  /** Whether the window is hidden (e.g. the optional Concepts roadmap). */
+  closed?: boolean;
+}
+
+export type LayoutState = Record<string, WindowLayout>;
+
+const VALID_MODES: WindowMode[] = ["docked", "floating"];
+
+/** Read the persisted per-window layout. Returns {} (callers merge over their defaults). */
+export function loadLayout(): LayoutState {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const out: LayoutState = {};
+    for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== "object") continue;
+      const v = value as Partial<WindowLayout>;
+      out[id] = {
+        mode: VALID_MODES.includes(v.mode as WindowMode) ? (v.mode as WindowMode) : "docked",
+        x: typeof v.x === "number" ? v.x : undefined,
+        y: typeof v.y === "number" ? v.y : undefined,
+        closed: typeof v.closed === "boolean" ? v.closed : undefined,
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveLayout(layout: LayoutState): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+  } catch {
+    /* ignore quota / unavailable storage */
+  }
+}
+
+export function clearLayout(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LAYOUT_KEY);
+  } catch {
+    /* ignore unavailable storage */
+  }
+}
+
+// ----- Practice track (Skill Drills) -----
+// A reinforcement track separate from engine concept mastery: drills earn their
+// own XP/streak and remember which drills the learner has seen / got wrong, so
+// selection can adapt. It NEVER writes engine mastery (golden rule).
+
+const PRACTICE_KEY = "fwr_practice";
+
+export interface ConceptPractice {
+  xp: number;
+  streak: number;
+  /** correct answers logged */
+  done: number;
+  /** drill ids already shown */
+  seen: string[];
+  /** drill ids currently answered wrong (cleared when later correct) */
+  wrong: string[];
+  lastTs: number;
+}
+
+export type PracticeState = Record<string, ConceptPractice>;
+
+export function emptyConceptPractice(): ConceptPractice {
+  return { xp: 0, streak: 0, done: 0, seen: [], wrong: [], lastTs: 0 };
+}
+
+export function loadPractice(): PracticeState {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(PRACTICE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const out: PracticeState = {};
+    for (const [concept, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== "object") continue;
+      const v = value as Partial<ConceptPractice>;
+      out[concept] = {
+        xp: typeof v.xp === "number" ? v.xp : 0,
+        streak: typeof v.streak === "number" ? v.streak : 0,
+        done: typeof v.done === "number" ? v.done : 0,
+        seen: Array.isArray(v.seen) ? v.seen.filter((s) => typeof s === "string") : [],
+        wrong: Array.isArray(v.wrong) ? v.wrong.filter((s) => typeof s === "string") : [],
+        lastTs: typeof v.lastTs === "number" ? v.lastTs : 0,
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function savePractice(state: PracticeState): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PRACTICE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota / unavailable storage */
+  }
+}
+
+export function clearPractice(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PRACTICE_KEY);
+  } catch {
+    /* ignore unavailable storage */
+  }
+}
 
 export function createDefaultFarmState(currentObjectiveId = DEFAULT_OBJECTIVE_ID): FarmState {
   return {

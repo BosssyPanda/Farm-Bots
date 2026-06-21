@@ -52,6 +52,28 @@ export const COZY_CARROTS: FarmPalette = {
 // Live drone accent (orange), read every frame so it matches the UI accent.
 export const DRONE_ACCENT = "#e0653c";
 
+// Isometric scene colors: sky backdrop + the two shaded side faces of every
+// raised tile block (left lighter, right darker — fakes a single light source).
+export const ISO = {
+  skyTop: "#8fb6cf",
+  skyBottom: "#b7cfdc",
+  // grass block sides
+  grassLeft: "#4f7d2b",
+  grassRight: "#3d6128",
+  // soil block sides
+  soilLeft: "#6e4527",
+  soilRight: "#54341d",
+  // block outline / crevice
+  edge: "rgba(20,30,14,0.28)",
+  shadow: "rgba(28,42,60,0.22)",
+} as const;
+
+// Iso tile geometry (art units): top diamond is TW wide x TH tall (2:1), each
+// block stands BH tall.
+export const TW = 40;
+export const TH = 20;
+export const BH = 14;
+
 // Per-crop body tint used for the ripe "fruit" flash on top of the leafy base.
 // Falls back to palette.crop when a crop isn't listed.
 export const CROP_TINT: Record<string, { body: string; hi: string }> = {

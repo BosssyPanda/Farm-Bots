@@ -1,10 +1,15 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import PixelFarm from "@/components/PixelFarm";
 import type { DerivedState } from "@/lib/animate";
 import { hudTick } from "@/lib/motion";
 import type { FarmState } from "@/lib/types";
+
+// 3D island scene is client-only + heavy, so load it lazily and never on the server.
+const IslandFarm = dynamic(() => import("@/components/IslandFarm"), { ssr: false });
 
 function phaseLabel(state: DerivedState): string {
   const a = state.lastAction;
@@ -15,8 +20,21 @@ function phaseLabel(state: DerivedState): string {
   return "working";
 }
 
-// Full-bleed farm: a fixed background layer the floating windows sit on top of,
-// matching the real game where the farm fills the world behind the code panels.
+function canRender3D(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia("(max-width: 900px)").matches) return false; // mobile → 2D fallback
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+// Full-bleed farm: a fixed background layer the floating windows sit on top of.
+// Renders the 3D floating-island scene on capable desktops, falling back to the
+// crisp 2D canvas on mobile / no-WebGL. Starts on the 2D path so server and first
+// client render match (no hydration mismatch), then upgrades after mount.
 export default function FarmView({
   width,
   height,
@@ -30,12 +48,54 @@ export default function FarmView({
   state: DerivedState;
   running?: boolean;
 }) {
+  const [use3D, setUse3D] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+  const readyRef = useRef(false);
+
+  useEffect(() => {
+    const update = () => setUse3D(canRender3D());
+    update();
+    const mq = window.matchMedia("(max-width: 900px)");
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Ready/error handshake: the island calls onReady once it has rendered a frame,
+  // and onError on a real failure. We fall back to the 2D farm only on onError, or
+  // if onReady never fires within a long safety window (genuine hang / failed chunk
+  // load) — NOT just because the heavy three bundle was slow to initialise.
+  const handleReady = useCallback(() => {
+    readyRef.current = true;
+  }, []);
+  const handleError = useCallback(() => setFailed(true), []);
+
+  useEffect(() => {
+    if (!use3D) return;
+    readyRef.current = false;
+    const t = setTimeout(() => {
+      if (!readyRef.current) setFailed(true);
+    }, 30000);
+    return () => clearTimeout(t);
+  }, [use3D]);
+
   const harvested = Object.values(state.resources).reduce((sum, n) => sum + (Number(n) || 0), 0);
   const label = phaseLabel(state);
 
   return (
-    <div className="farm-backdrop" aria-hidden={false}>
-      <PixelFarm width={width} height={height} state={state} farmState={farmState} running={running} />
+    <div className="farm-backdrop" ref={backdropRef}>
+      {use3D && !failed ? (
+        <IslandFarm
+          state={state}
+          playWidth={width}
+          playHeight={height}
+          running={running}
+          onReady={handleReady}
+          onError={handleError}
+        />
+      ) : (
+        <PixelFarm width={width} height={height} state={state} farmState={farmState} running={running} />
+      )}
 
       <div className="hud left">
         {farmState.width} &times; {farmState.height} plots
@@ -53,7 +113,6 @@ export default function FarmView({
         </div>
       </div>
 
-      <div className="farm-scanlines" />
       <div className="farm-vignette" />
     </div>
   );
